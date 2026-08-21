@@ -9,8 +9,7 @@
         #map { height:100%; width:100%; cursor: crosshair; }
         #loginOverlay {
             position: fixed; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center;
-            z-index: 99999;
+            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 99999;
         }
         #loginBox {
             background: white; padding: 30px 40px; border-radius: 16px;
@@ -19,57 +18,102 @@
         #loginBox h2 { margin-top:0; text-align:center; }
         #loginBox label { display:block; margin:10px 0 4px; font-weight:600; }
         #loginBox input { width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; box-sizing:border-box; }
-        #loginBox button { width:100%; margin-top:12px; padding:10px; background:#2b7be4; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer; }
+        #loginBox button { width:100%; margin-top:12px; padding:10px; background:#2b7be4; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; }
         #loginBox button:hover { background:#1f6ad0; }
         #loginBox .error { color:red; font-size:13px; margin-top:6px; display:none; }
         #loginBox .register-link { text-align:center; margin-top:12px; font-size:14px; }
         #loginBox .register-link a { color:#2b7be4; cursor:pointer; text-decoration:underline; }
         #registerForm { display:none; margin-top:16px; border-top:1px solid #eee; padding-top:16px; }
-        .custom-control { position: absolute; left:20px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.9); padding:6px 8px 6px 10px; border-radius:6px; box-shadow:0 0 10px rgba(0,0,0,0.2); z-index:1000; display:flex; flex-direction:column; gap:3px; align-items:center; width:auto; max-height:90vh; overflow:visible; }
-        .custom-control button, .custom-control .dropdown-btn { width:25px; height:25px; border:1px solid #888; border-radius:4px; background:#fff; color:#333; font-size:11px; font-weight:bold; cursor:pointer; line-height:25px; text-align:center; padding:0; flex-shrink:0; }
-        .custom-control button:hover { background:#f0f0f0; }
-        .custom-control button.active { background:#007bff; color:#fff; border-color:#007bff; }
-        .custom-control button.radar-on { background:#28a745; color:#fff; border-color:#28a745; }
-        .custom-control button.radar-off { background:#dc3545; color:#fff; border-color:#dc3545; }
-        .custom-control button.sectors-on { background:#17a2b8; color:#fff; border-color:#17a2b8; }
-        .custom-control button.sectors-off { background:#6c757d; color:#fff; border-color:#6c757d; }
-        .custom-control button.delete-mode { background:#ff9800; color:#fff; border-color:#ff9800; }
-        .custom-control button.map-on { background:#007bff; color:#fff; border-color:#007bff; }
-        .custom-control button.map-off { background:#6c757d; color:#fff; border-color:#6c757d; }
-        .custom-control button.grid-blue { background:#0055ff; color:#fff; border-color:#0055ff; }
-        .custom-control button.firebase-on { background:#ffca28; color:#000; border-color:#ffca28; }
-        .custom-control button.firebase-off { background:#6c757d; color:#fff; border-color:#6c757d; }
-        .custom-control .separator { width:70%; height:1px; background:#ccc; margin:2px 0; }
-        .custom-control input[type="file"] { display:none; }
-        .delete-btn { opacity:0.5; cursor:not-allowed; }
-        .delete-btn.owner-active { opacity:1; cursor:pointer; }
-        .delete-btn.owner-active:hover { background:#f0f0f0; }
-        .dropdown-container { position:relative; display:inline-block; overflow:visible; }
-        .dropdown-content { display:none; position:absolute; top:100%; left:0; margin-top:2px; background-color:#f9f9f9; min-width:100%; width:auto; white-space:nowrap; box-shadow:0 8px 16px 0 rgba(0,0,0,0.2); z-index:9999; border-radius:4px; overflow:visible; pointer-events:auto; }
-        .dropdown-content button { width:100%; height:28px; border:none; background:#fff; color:#333; font-size:13px; font-weight:bold; cursor:pointer; line-height:28px; text-align:center; padding:0 12px; }
-        .dropdown-content button:hover { background:#ddd; }
-        .show-dropdown { display:block; }
-        #info { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.85); padding:2px 12px; border-radius:10px; box-shadow:0 0 8px rgba(0,0,0,0.2); z-index:1000; font-size:10px; pointer-events:none; text-align:center; }
-        #mouse-azimuth { position:absolute; bottom:60px; right:20px; background:rgba(0,0,0,0.7); color:#fff; padding:4px 12px; border-radius:4px; font-size:13px; font-weight:bold; z-index:1000; pointer-events:none; box-shadow:0 2px 8px rgba(0,0,0,0.3); font-family:monospace; line-height:1.4; min-width:220px; text-align:left; }
-        .status { position:absolute; bottom:120px; right:20px; background:rgba(0,0,0,0.6); color:#ffd700; padding:2px 10px; border-radius:4px; font-size:10px; z-index:1000; pointer-events:none; display:none; }
-        #hoverTooltip { position:absolute; display:none; background:rgba(0,0,0,0.75); color:#fff; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold; pointer-events:none; z-index:10000; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.3); }
-        #tableOverlay { position:fixed; top:0; left:0; width:100%; max-height:50vh; background:#fff; z-index:2000; overflow-y:auto; display:none; box-shadow:0 2px 10px rgba(0,0,0,0.3); border-bottom:2px solid #ccc; }
-        #tableContainer { padding:10px 20px; max-width:100%; margin:0; }
-        #tableContainer table { width:100%; border-collapse:collapse; font-size:12px; }
-        #tableContainer th, #tableContainer td { border:1px solid #ccc; padding:4px 6px; text-align:center; vertical-align:middle; }
-        #tableContainer th { background:#f0f0f0; position:sticky; top:0; z-index:10; }
-        .close-table { float:right; background:#dc3545; color:#fff; border:none; border-radius:4px; padding:4px 12px; cursor:pointer; margin-bottom:6px; }
-        .close-table:hover { background:#c82333; }
-        #permissionBadge { position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.7); color:#fff; padding:4px 12px; border-radius:20px; font-size:12px; z-index:1000; pointer-events:none; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+        .custom-control {
+            position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.9); padding: 6px 8px 6px 10px; border-radius: 6px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2); z-index: 1000;
+            display: flex; flex-direction: column; gap: 3px; align-items: center;
+            width: auto; max-height: 90vh; overflow: visible;
+        }
+        .custom-control button, .custom-control .dropdown-btn {
+            width: 25px; height: 25px; border: 1px solid #888; border-radius: 4px;
+            background: #fff; color: #333; font-size: 11px; font-weight: bold;
+            cursor: pointer; line-height: 25px; text-align: center; padding: 0; flex-shrink: 0;
+        }
+        .custom-control button:hover { background: #f0f0f0; }
+        .custom-control button.active { background: #007bff; color: #fff; border-color: #007bff; }
+        .custom-control button.radar-on { background: #28a745; color: #fff; border-color: #28a745; }
+        .custom-control button.radar-off { background: #dc3545; color: #fff; border-color: #dc3545; }
+        .custom-control button.sectors-on { background: #17a2b8; color: #fff; border-color: #17a2b8; }
+        .custom-control button.sectors-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.delete-mode { background: #ff9800; color: #fff; border-color: #ff9800; }
+        .custom-control button.map-on { background: #007bff; color: #fff; border-color: #007bff; }
+        .custom-control button.map-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
+        .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
+        .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control .separator { width: 70%; height: 1px; background: #ccc; margin: 2px 0; }
+        .custom-control input[type="file"] { display: none; }
+        .delete-btn { opacity: 0.5; cursor: not-allowed; }
+        .delete-btn.owner-active { opacity: 1; cursor: pointer; }
+        .delete-btn.owner-active:hover { background: #f0f0f0; }
+        .dropdown-container { position: relative; display: inline-block; overflow: visible; }
+        .dropdown-content {
+            display: none; position: absolute; top: 100%; left: 0; margin-top: 2px;
+            background-color: #f9f9f9; min-width: 100%; width: auto; white-space: nowrap;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 9999; border-radius: 4px;
+            overflow: visible; pointer-events: auto;
+        }
+        .dropdown-content button { width: 100%; height: 28px; border: none; background: #fff; color: #333; font-size: 13px; font-weight: bold; cursor: pointer; line-height: 28px; text-align: center; padding: 0 12px; }
+        .dropdown-content button:hover { background: #ddd; }
+        .show-dropdown { display: block; }
+        #info {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.85); padding: 2px 12px; border-radius: 10px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.2); z-index: 1000; font-size: 10px;
+            pointer-events: none; text-align: center;
+        }
+        #mouse-azimuth {
+            position: absolute; bottom: 60px; right: 20px;
+            background: rgba(0,0,0,0.7); color: #fff; padding: 4px 12px; border-radius: 4px;
+            font-size: 13px; font-weight: bold; z-index: 1000; pointer-events: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-family: monospace; line-height: 1.4;
+            min-width: 220px; text-align: left;
+        }
+        .status {
+            position: absolute; bottom: 120px; right: 20px;
+            background: rgba(0,0,0,0.6); color: #ffd700; padding: 2px 10px; border-radius: 4px;
+            font-size: 10px; z-index: 1000; pointer-events: none; display: none;
+        }
+        #hoverTooltip {
+            position: absolute; display: none; background: rgba(0,0,0,0.75); color: #fff;
+            padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;
+            pointer-events: none; z-index: 10000; white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        #tableOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; max-height: 50vh;
+            background: white; z-index: 2000; overflow-y: auto; display: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); border-bottom: 2px solid #ccc;
+        }
+        #tableContainer { padding: 10px 20px; max-width: 100%; margin: 0; }
+        #tableContainer table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #tableContainer th, #tableContainer td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; vertical-align: middle; }
+        #tableContainer th { background: #f0f0f0; position: sticky; top: 0; z-index: 10; }
+        .close-table { float: right; background: #dc3545; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; margin-bottom: 6px; }
+        .close-table:hover { background: #c82333; }
+        #permissionBadge {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(0,0,0,0.7); color: #fff; padding: 4px 12px; border-radius: 20px;
+            font-size: 12px; z-index: 1000; pointer-events: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
         @media (max-width:600px) {
-            .custom-control { left:10px; padding:4px 6px 4px 8px; gap:2px; max-height:80vh; }
-            .custom-control button, .custom-control .dropdown-btn { width:22px; height:22px; font-size:10px; line-height:22px; }
-            .dropdown-content button { height:24px; font-size:11px; line-height:24px; padding:0 8px; }
-            #info { font-size:9px; bottom:10px; }
-            #mouse-azimuth { font-size:11px; padding:2px 8px; bottom:50px; right:10px; min-width:140px; }
-            #tableContainer { padding:10px; max-width:98%; }
-            #tableContainer table { font-size:10px; }
-            #tableContainer th, #tableContainer td { padding:3px 4px; }
+            .custom-control { left: 10px; padding: 4px 6px 4px 8px; gap: 2px; max-height: 80vh; }
+            .custom-control button, .custom-control .dropdown-btn { width: 22px; height: 22px; font-size: 10px; line-height: 22px; }
+            .dropdown-content button { height: 24px; font-size: 11px; line-height: 24px; padding: 0 8px; }
+            #info { font-size: 9px; bottom: 10px; }
+            #mouse-azimuth { font-size: 11px; padding: 2px 8px; bottom: 50px; right: 10px; min-width: 140px; }
+            #tableContainer { padding: 10px; max-width: 98%; }
+            #tableContainer table { font-size: 10px; }
+            #tableContainer th, #tableContainer td { padding: 3px 4px; }
+            #tableOverlay { max-height: 40vh; }
         }
     </style>
 </head>
@@ -96,7 +140,6 @@
         </div>
     </div>
 
-    <!-- MAPA -->
     <div id="map"></div>
     <div id="hoverTooltip"></div>
 
@@ -126,29 +169,33 @@
         <div class="dropdown-container" id="pp8DropdownContainer">
             <button id="pp8DropdownBtn" class="dropdown-btn" title="Odaberi PP8 sektor (0-4)">P8</button>
             <div id="pp8DropdownContent" class="dropdown-content">
-                <button data-value="0">0</button><button data-value="1">1</button><button data-value="2">2</button>
-                <button data-value="3">3</button><button data-value="4">4</button>
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
             </div>
         </div>
         <div class="dropdown-container" id="pp8xDropdownContainer">
             <button id="pp8xDropdownBtn" class="dropdown-btn" title="Odaberi PP8X sektor (0-4)">PX</button>
             <div id="pp8xDropdownContent" class="dropdown-content">
-                <button data-value="0">0</button><button data-value="1">1</button><button data-value="2">2</button>
-                <button data-value="3">3</button><button data-value="4">4</button>
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
             </div>
         </div>
         <div class="dropdown-container" id="td6bDropdownContainer">
             <button id="td6bDropdownBtn" class="dropdown-btn" title="Odaberi TD6B sektor (0-4)">T6</button>
             <div id="td6bDropdownContent" class="dropdown-content">
-                <button data-value="0">0</button><button data-value="1">1</button><button data-value="2">2</button>
-                <button data-value="3">3</button><button data-value="4">4</button>
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
             </div>
         </div>
         <div class="dropdown-container" id="td6bxDropdownContainer">
             <button id="td6bxDropdownBtn" class="dropdown-btn" title="Odaberi TD6BX sektor (0-4)">TX</button>
             <div id="td6bxDropdownContent" class="dropdown-content">
-                <button data-value="0">0</button><button data-value="1">1</button><button data-value="2">2</button>
-                <button data-value="3">3</button><button data-value="4">4</button>
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
             </div>
         </div>
         <span class="separator"></span>
@@ -182,14 +229,14 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
 
-            // ===================================================================
-            // 🔑 POSTAVITE SVOJ UID OVDJE NAKON PRVE PRIJAVE
-            // ===================================================================
-            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2'; // <-- ZAMIJENITE OVO
+            // ================================================================
+            // 🔑 VAŠ UID (VEĆ UNESEN)
+            // ================================================================
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';
 
-            // ===================================================================
+            // ================================================================
             // 🔥 FIREBASE
-            // ===================================================================
+            // ================================================================
             const firebaseConfig = {
                 apiKey: "AIzaSyCiu6siFd6lfzD0JtQLnWkOE7mMb0NMGZA",
                 authDomain: "planseta-ce461.firebaseapp.com",
@@ -217,9 +264,9 @@
             const auth = firebase.auth();
             let currentUser = null;
 
-            // ===================================================================
-            // 📌 MAPA
-            // ===================================================================
+            // ================================================================
+            // 📌 MAPA I DOM REFERENCE
+            // ================================================================
             const map = L.map('map').setView([44.4, 17.5], 8);
             const tileUrl = 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png';
             const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19, attribution: '© OpenStreetMap France' }).addTo(map);
@@ -229,9 +276,15 @@
                 else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; this.title = 'Sakrij mapu'; }
             });
 
-            // ===================================================================
+            const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
+            const hoverTooltip = document.getElementById('hoverTooltip');
+            const statusDiv = document.getElementById('status');
+            const tableWrapper = document.getElementById('tableWrapper');
+            const tableOverlay = document.getElementById('tableOverlay');
+
+            // ================================================================
             // 📦 POMOĆNE FUNKCIJE
-            // ===================================================================
+            // ================================================================
             const KM_PER_DEG_LAT = 111.32;
             function destination(lat, lon, bearingDeg, distanceKm) {
                 const br = bearingDeg * Math.PI / 180;
@@ -298,9 +351,9 @@
                        String(date.getSeconds()).padStart(2, '0');
             }
 
-            // ===================================================================
+            // ================================================================
             // 🔐 LOGIN / REGISTRACIJA
-            // ===================================================================
+            // ================================================================
             const loginOverlay = document.getElementById('loginOverlay');
             const loginEmail = document.getElementById('loginEmail');
             const loginPassword = document.getElementById('loginPassword');
@@ -356,9 +409,9 @@
                 showRegisterLink.style.display = 'inline';
             });
 
-            // ===================================================================
-            // 📍 GLOBALNE PROMENLJIVE (SVE NA JEDNOM MESTU)
-            // ===================================================================
+            // ================================================================
+            // 📍 GLOBALNE VARIJABLE
+            // ================================================================
             let bPoints = [];
             let bLayer = L.layerGroup().addTo(map);
             let bCounter = 0;
@@ -371,27 +424,21 @@
             let pngImgWidth = null, pngImgHeight = null;
             let hoveringBRow = null, lastMouseLatLng = null;
             let selectedPP8 = 0, selectedPP8X = 0, selectedTD6B = 0, selectedTD6BX = 0;
-            let markerData = [], addedCoords = {}, totalSectors = 0;
+            let markerData = [];
+            let addedCoords = {};
+            let totalSectors = 0;
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
 
-            // DOM referenci (da ne bi bilo undefined)
-            const hoverTooltip = document.getElementById('hoverTooltip');
-            const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
-            const statusDiv = document.getElementById('status');
-            const tableOverlay = document.getElementById('tableOverlay');
-            const tableWrapper = document.getElementById('tableWrapper');
-            const permissionBadge = document.getElementById('permissionBadge');
-
-            // ===================================================================
-            // 📋 CSV (skraćen)
-            // ===================================================================
+            // ================================================================
+            // 📋 CSV (samo prva tačka radi testa)
+            // ================================================================
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501`;
 
-            // ===================================================================
+            // ================================================================
             // 🗺️ A MARKERI I SEKTORI
-            // ===================================================================
+            // ================================================================
             const aIcon = L.divIcon({
                 className: 'a-marker',
                 html: '<div style="width:6px;height:6px;background:#cc0000;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
@@ -494,9 +541,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
             document.getElementById('count').textContent = totalSectors;
 
-            // ===================================================================
+            // ================================================================
             // B IKONICE
-            // ===================================================================
+            // ================================================================
             const bIcon = L.divIcon({
                 className: 'b-marker',
                 html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
@@ -510,9 +557,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 iconAnchor: [7, 7]
             });
 
-            // ===================================================================
-            // FUNKCIJE ZA B
-            // ===================================================================
+            // ================================================================
+            // FUNKCIJE ZA B TAČKE
+            // ================================================================
             function isPointInsideColoredCell(lat, lon) {
                 for (let c of greenCells) {
                     if (lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax) return true;
@@ -546,19 +593,17 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         btn.classList.add('delete-btn');
                     }
                 });
-                if (permissionBadge) {
-                    if (isOwnerBool) {
-                        permissionBadge.textContent = '👑 Vlasnik (dodavanje i brisanje)';
-                    } else {
-                        permissionBadge.textContent = '👀 Samo čitanje';
-                    }
+                const badge = document.getElementById('permissionBadge');
+                if (isOwnerBool) {
+                    badge.textContent = '👑 Vlasnik (dodavanje i brisanje)';
+                } else {
+                    badge.textContent = '👀 Samo čitanje';
                 }
+                console.log('Status ažuriran. Vlasnik?', isOwnerBool);
             }
 
             function saveBPointsToFirebase() {
-                if (!firebaseInitialized) return;
-                if (!isOwner()) return;
-                if (!bPointsRef) return;
+                if (!firebaseInitialized || !isOwner() || !bPointsRef) return;
                 const data = bPoints.map(row => ({
                     bIndex: row.bIndex,
                     bLat: row.bLat,
@@ -587,7 +632,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 if (tableOverlay.style.display === 'block') renderTable();
                 deleteMode = false;
                 const deleteBtn = document.getElementById('deleteSelectedB');
-                if (deleteBtn) { deleteBtn.classList.remove('delete-mode'); deleteBtn.textContent = '❌B'; }
+                deleteBtn.classList.remove('delete-mode');
+                deleteBtn.textContent = '❌B';
                 if (hoveringBRow === row) {
                     hoveringBRow = null;
                     if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
@@ -607,7 +653,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 tableOverlay.style.display = 'none';
                 deleteMode = false;
                 const deleteBtn = document.getElementById('deleteSelectedB');
-                if (deleteBtn) { deleteBtn.classList.remove('delete-mode'); deleteBtn.textContent = '❌B'; }
+                deleteBtn.classList.remove('delete-mode');
+                deleteBtn.textContent = '❌B';
                 hoveringBRow = null;
                 if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                 saveBPointsToFirebase();
@@ -707,9 +754,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 }
             }
 
-            // ===================================================================
+            // ================================================================
             // ADD B POINT
-            // ===================================================================
+            // ================================================================
             function addBPoint(lat, lon) {
                 if (!isOwner()) {
                     alert('⚠️ Samo vlasnik može dodavati B tačke.');
@@ -753,8 +800,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     marker: null
                 };
                 bPoints.push(row);
-                const popupInitial =
-                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
+                const popupInitial = `PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
                 const marker = L.marker([lat, lon], { icon: bIcon })
                     .addTo(bLayer)
                     .bindPopup(popupInitial);
@@ -780,8 +826,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         row.td6bx = td6bx;
                         row.confirmationDate = confirmNow;
                         row.confirmationTime = confirmNow.toLocaleString();
-                        const popupConfirmed =
-                            `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
+                        const popupConfirmed = `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
                         marker.setPopupContent(popupConfirmed);
                         if (hoveringBRow === row) {
                             showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
@@ -804,16 +849,13 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 saveBPointsToFirebase();
             }
 
-            // ===================================================================
+            // ================================================================
             // B VISIBILITY, SECTORS
-            // ===================================================================
+            // ================================================================
             function updateBVisibility() {
                 if (!activeA) {
                     bPoints.forEach(row => {
-                        if (row.marker) {
-                            row.marker.setIcon(bIcon);
-                            row.marker.setOpacity(1);
-                        }
+                        if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); }
                     });
                     document.getElementById('bInACount').textContent = '0';
                     return;
@@ -875,15 +917,13 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 updateBVisibility();
             }
 
-            // ===================================================================
+            // ================================================================
             // GRID
-            // ===================================================================
+            // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
             function saveGridColorsToFirebase() {
-                if (!firebaseInitialized) return;
-                if (!isOwner()) return;
-                if (!gridColorsRef) return;
+                if (!firebaseInitialized || !isOwner() || !gridColorsRef) return;
                 const data = {
                     greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
                     blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
@@ -892,8 +932,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function loadGridColorsFromFirebase() {
-                if (!firebaseInitialized) return;
-                if (!gridColorsRef) return;
+                if (!firebaseInitialized || !gridColorsRef) return;
                 gridColorsRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data) {
@@ -932,8 +971,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function listenGridColors() {
-                if (!firebaseInitialized) return;
-                if (!gridColorsRef) return;
+                if (!firebaseInitialized || !gridColorsRef) return;
                 if (gridColorsListener) gridColorsListener.off();
                 gridColorsListener = gridColorsRef;
                 gridColorsListener.on('value', snapshot => {
@@ -1047,12 +1085,11 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
             generateGrid();
 
-            // ===================================================================
-            // LOAD B FROM FIREBASE
-            // ===================================================================
+            // ================================================================
+            // LOAD B IZ FIREBASE
+            // ================================================================
             function loadBPointsFromFirebase() {
-                if (!firebaseInitialized) return;
-                if (!bPointsRef) return;
+                if (!firebaseInitialized || !bPointsRef) return;
                 bPointsRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data && Array.isArray(data)) {
@@ -1136,8 +1173,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function listenBPoints() {
-                if (!firebaseInitialized) return;
-                if (!bPointsRef) return;
+                if (!firebaseInitialized || !bPointsRef) return;
                 if (bPointsListener) bPointsListener.off();
                 bPointsListener = bPointsRef;
                 bPointsListener.on('value', snapshot => {
@@ -1224,9 +1260,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 });
             }
 
-            // ===================================================================
+            // ================================================================
             // TABELA
-            // ===================================================================
+            // ================================================================
             function buildTableData() {
                 return bPoints.map(row => ({
                     'B redni': row.bIndex,
@@ -1263,9 +1299,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 tableWrapper.innerHTML = html;
             }
 
-            // ===================================================================
+            // ================================================================
             // TOOLTIP I AZIMUT
-            // ===================================================================
+            // ================================================================
             function showHoverTooltip(text, latlng) {
                 hoverTooltip.textContent = text;
                 hoverTooltip.style.display = 'block';
@@ -1289,15 +1325,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 const dist = haversine(activeA.lat, activeA.lon, latlng.lat, latlng.lng);
                 html += `Azimut od A (${activeA.fpgs}): ${az.toFixed(1)}°<br>Udaljenost: ${dist.toFixed(1)} km`;
                 if (hoveringBRow) html += `<br>PP8: ${hoveringBRow.pp8}  TD6B: ${hoveringBRow.td6b}`;
-                if (pngOverlay && pngVisible && pngImgWidth && pngImgHeight) {
-                    const [latMin, lonMin] = PNG_BOUNDS[0];
-                    const [latMax, lonMax] = PNG_BOUNDS[1];
-                    if (latlng.lat >= latMin && latlng.lat <= latMax && latlng.lng >= lonMin && latlng.lng <= lonMax) {
-                        const px = ((latlng.lng - lonMin) / (lonMax - lonMin)) * pngImgWidth;
-                        const py = ((latMax - latlng.lat) / (latMax - latMin)) * pngImgHeight;
-                        html += `<br>Piksel: ${Math.round(px)}, ${Math.round(py)}`;
-                    }
-                }
                 mouseAzimuthDiv.innerHTML = html;
             }
 
@@ -1309,25 +1336,15 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             map.on('mousemove', function(e) {
                 lastMouseLatLng = e.latlng;
                 updateMouseAzimuth(e.latlng);
-                if (pngOverlay && pngVisible && pngImgWidth && pngImgHeight) {
-                    const lat = e.latlng.lat, lon = e.latlng.lng;
-                    const [latMin, lonMin] = PNG_BOUNDS[0];
-                    const [latMax, lonMax] = PNG_BOUNDS[1];
-                    if (lat >= latMin && lat <= latMax && lon >= lonMin && lon <= lonMax) {
-                        const px = ((lon - lonMin) / (lonMax - lonMin)) * pngImgWidth;
-                        const py = ((latMax - lat) / (latMax - latMin)) * pngImgHeight;
-                        showHoverTooltip(`Piksel: ${Math.round(px)}, ${Math.round(py)}`, e.latlng);
-                    }
-                }
             });
 
             map.on('click', function(e) {
                 addBPoint(e.latlng.lat, e.latlng.lng);
             });
 
-            // ===================================================================
+            // ================================================================
             // EVENTI DUGMADI
-            // ===================================================================
+            // ================================================================
             document.querySelector('#customControl button[data-filter="all"]').addEventListener('click', function() {
                 filterByA = false;
                 if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
@@ -1490,8 +1507,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
 
             // PNG
-            const PNG_BOUNDS = [[41.46974424083233, 15.46096394958954], [45.96991870077077, 21.66292597350616]];
-
             document.getElementById('loadKmzBtn').addEventListener('click', function() {
                 document.getElementById('fileInput').click();
             });
@@ -1580,10 +1595,11 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 };
                 img.src = url;
             }
+            const PNG_BOUNDS = [[41.46974424083233, 15.46096394958954], [45.96991870077077, 21.66292597350616]];
 
-            // ===================================================================
+            // ================================================================
             // FIREBASE LISTENERI
-            // ===================================================================
+            // ================================================================
             function startListening() {
                 if (!firebaseInitialized) return;
                 if (bPointsRef) listenBPoints();
@@ -1618,19 +1634,19 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 console.log('📡 Slušanje Firebase podataka aktivirano.');
             }
 
-            // ===================================================================
-            // 🔐 AUTH STATE CHANGED (nakon prijave)
-            // ===================================================================
+            // ================================================================
+            // 🔐 AUTH STATE (Nakon prijave)
+            // ================================================================
             auth.onAuthStateChanged(user => {
                 if (user) {
                     currentUser = user;
                     loginOverlay.style.display = 'none';
                     console.log('👤 Prijavljen:', user.email, 'UID:', user.uid);
-                    // Ako OWNER_UID nije postavljen, upozori
-                    if (OWNER_UID === 'YOUR_UID_HERE') {
-                        console.warn('⚠️ UPOZORENJE: OWNER_UID nije postavljen!');
-                        console.warn('Tvoj UID je:', user.uid);
-                        console.warn('Kopiraj ga i zalijepi u OWNER_UID u kodu.');
+                    // Provjeri da li je OWNER_UID ispravan
+                    if (OWNER_UID === '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2') {
+                        console.log('✅ OWNER_UID ispravno postavljen.');
+                    } else {
+                        console.warn('⚠️ OWNER_UID nije ispravan! Trenutni UID:', user.uid);
                     }
                     updateOwnerUI();
                     // Postavi Firebase reference
@@ -1650,11 +1666,12 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 }
             });
 
-            // ===================================================================
-            // POKRENI
-            // ===================================================================
+            // ================================================================
+            // 🚀 POKRENI
+            // ================================================================
             updateSectorsVisibility();
             console.log('✅ Planseta pokrenuta. Prijavite se sa email/lozinkom.');
+            console.log('🔑 Vaš UID je već unesen:', OWNER_UID);
         });
     </script>
 </body>
