@@ -2,14 +2,22 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – A/B tačke i boje</title>
+    <title>Planseta</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
         #map { height:100%; width:100%; cursor: crosshair; }
+        #loading {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(255,255,255,0.95); display: flex; justify-content: center; align-items: center;
+            z-index: 99999; font-size: 24px; font-weight: bold; flex-direction: column;
+        }
+        #loading .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading.error { color: #d32f2f; }
+        #loading.error .spinner { border-top-color: #d32f2f; animation: none; }
         .custom-control { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); padding: 6px 8px 6px 10px; border-radius: 6px; box-shadow: 0 0 10px rgba(0,0,0,0.2); z-index: 1000; display: flex; flex-direction: column; gap: 3px; align-items: center; width: auto; max-height: 90vh; overflow: visible; }
         .custom-control button, .custom-control .dropdown-btn { width: 25px; height: 25px; border: 1px solid #888; border-radius: 4px; background: #fff; color: #333; font-size: 11px; font-weight: bold; cursor: pointer; line-height: 25px; text-align: center; padding: 0; flex-shrink: 0; }
-        #pp8DropdownBtn, #pp8xDropdownBtn, #td6bDropdownBtn, #td6bxDropdownBtn { font-size: 9px; }
         .custom-control button:hover { background: #f0f0f0; }
         .custom-control button.active { background: #007bff; color: #fff; border-color: #007bff; }
         .custom-control button.radar-on { background: #28a745; color: #fff; border-color: #28a745; }
@@ -49,7 +57,6 @@
         @media (max-width: 600px) {
             .custom-control { left: 10px; padding: 4px 6px 4px 8px; gap: 2px; max-height: 80vh; }
             .custom-control button, .custom-control .dropdown-btn { width: 22px; height: 22px; font-size: 10px; line-height: 22px; }
-            #pp8DropdownBtn, #pp8xDropdownBtn, #td6bDropdownBtn, #td6bxDropdownBtn { font-size: 8px; }
             .dropdown-content button { height: 24px; font-size: 11px; line-height: 24px; padding: 0 8px; }
             #info { font-size: 9px; bottom: 10px; }
             #mouse-azimuth { font-size: 11px; padding: 2px 8px; bottom: 50px; right: 10px; min-width: 140px; }
@@ -75,6 +82,11 @@
     </style>
 </head>
 <body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <span id="loadingText">Učitavanje...</span>
+    </div>
+
     <div id="map"></div>
     <div id="hoverTooltip"></div>
 
@@ -94,7 +106,7 @@
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B">🗑️</button>
-        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B">❌B</button>
+        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (klik na marker)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
         <button id="deleteBInA" class="delete-btn" title="Obriši sve B tačke unutar aktivnog A" style="background:#dc3545;color:#fff;">🗑️A</button>
         <button id="exportBInA" title="Izvezi B tačke unutar aktivnog A u Excel" style="background:#28a745;color:#fff;">📊A</button>
@@ -156,7 +168,7 @@
     <div id="tableOverlay">
         <div id="tableContainer">
             <button class="close-table" id="closeTableBtn">✕ Zatvori</button>
-            <h3 style="margin-top:0;">Presjek A-B (PP8, PP8X, TD6B, TD6BX)</h3>
+            <h3 style="margin-top:0;">Presjek A-B</h3>
             <div id="tableWrapper" style="max-height:50vh; overflow:auto;"></div>
         </div>
     </div>
@@ -173,8 +185,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
 
+            // ===== VAŠ UID =====
             const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
 
+            // ===== FIREBASE =====
             const firebaseConfig = {
                 apiKey: "AIzaSyCiu6siFd6lfzD0JtQLnWkOE7mMb0NMGZA",
                 authDomain: "planseta-ce461.firebaseapp.com",
@@ -192,54 +206,30 @@
                 firebaseDb = firebase.database();
                 firebaseInitialized = true;
                 document.getElementById('firebaseStatusBtn').className = 'firebase-on';
-            } catch (e) { console.error(e); }
+                console.log('✅ Firebase inicijalizovan');
+            } catch (e) {
+                console.error('❌ Firebase init greška:', e);
+                showError('Greška pri povezivanju na Firebase: ' + e.message);
+                return;
+            }
 
             const auth = firebase.auth();
             let currentUser = null;
-            let userRole = 'admin';
-            window.__userRole = userRole;
 
-            function anonimnaPrijava() {
-                auth.signInAnonymously()
-                    .then((userCredential) => {
-                        currentUser = userCredential.user;
-                        updateOwnerUI();
-                        if (firebaseInitialized) startListening();
-                        loadBPointsFromFirebase();
-                        loadGridColorsFromFirebase();
-                        listenGridColors();
-                    })
-                    .catch((error) => { console.error(error); });
-            }
+            // ===== GLOBALNE VARIJABLE =====
+            let bPoints = [];
+            let bLayer, bCounter = 0, deleteMode = false;
+            let selectedPP8 = 0, selectedPP8X = 0, selectedTD6B = 0, selectedTD6BX = 0;
+            let activeA = null, activeAKey = null, filterByA = false;
+            let sectorsByA = {}, allSectors = [], sectorsVisible = true;
+            let greenCells = [], blueCells = [];
+            let gridCells = [], selectedGridColor = null;
+            let pngOverlay = null, pngVisible = false;
+            let pngImgWidth = null, pngImgHeight = null;
+            let hoveringBRow = null, lastMouseLatLng = null;
+            let currentKmzName = null, currentKmzModified = null, currentKmzSize = null;
 
-            function isOwner() {
-                if (!currentUser) return false;
-                if (OWNER_UID === 'YOUR_UID_HERE') return false;
-                return currentUser.uid === OWNER_UID;
-            }
-
-            function updateOwnerUI() {
-                const isOwnerBool = isOwner();
-                const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB, #deleteBInA');
-                deleteBtns.forEach(btn => {
-                    if (isOwnerBool) {
-                        btn.classList.remove('delete-btn');
-                        btn.classList.add('owner-active');
-                    } else {
-                        btn.classList.remove('owner-active');
-                        btn.classList.add('delete-btn');
-                    }
-                });
-                const badge = document.getElementById('permissionBadge');
-                if (isOwnerBool) {
-                    badge.textContent = '👑 Vlasnik';
-                } else {
-                    badge.textContent = '👀 Unos (brisanje onemogućeno)';
-                }
-            }
-
-            anonimnaPrijava();
-
+            // ===== MAPA =====
             const map = L.map('map').setView([44.4, 17.5], 8);
             const tileUrl = 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png';
             const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19, attribution: '© OpenStreetMap France' }).addTo(map);
@@ -249,6 +239,7 @@
                 else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; this.title = 'Sakrij mapu'; }
             });
 
+            // ===== POMOĆNE FUNKCIJE =====
             const KM_PER_DEG_LAT = 111.32;
             function destination(lat, lon, bearingDeg, distanceKm) {
                 const br = bearingDeg * Math.PI / 180;
@@ -315,9 +306,32 @@
                        String(date.getSeconds()).padStart(2, '0');
             }
 
+            // ===== LOADING KONTROLA =====
+            function showError(msg) {
+                const el = document.getElementById('loading');
+                el.innerHTML = '<div style="color:#d32f2f; font-size:20px;">❌ ' + msg + '</div>';
+                el.classList.add('error');
+                console.error(msg);
+            }
+
+            function hideLoading() {
+                document.getElementById('loading').style.display = 'none';
+            }
+
+            // Fallback – ako se nakon 10 sekundi ne sakrije loading, prikaži grešku
+            setTimeout(function() {
+                const loading = document.getElementById('loading');
+                if (loading.style.display !== 'none') {
+                    loading.innerHTML = '<div style="color:#d32f2f; font-size:20px;">⏳ Predugo učitavanje. Provjerite konzolu (F12) za greške.</div>';
+                    loading.classList.add('error');
+                }
+            }, 10000);
+
+            // ===== CSV =====
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501`;
 
+            // ===== A MARKERI I SEKTORI =====
             const aIcon = L.divIcon({
                 className: 'a-marker',
                 html: '<div style="width:6px;height:6px;background:#cc0000;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
@@ -334,408 +348,54 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             const markerLayer = L.layerGroup().addTo(map);
             const pp8Layer = L.layerGroup().addTo(map);
             const pp6Layer = L.layerGroup().addTo(map);
+            bLayer = L.layerGroup().addTo(map);
 
-            const sectorsByA = {};
-            const allSectors = [];
-            let filterByA = false, activeAKey = null, activeA = null;
-            let sectorsVisible = true;
+            // ===== FUNKCIJE ZA B =====
+            function isPointInsideColoredCell(lat, lon) {
+                for (let c of greenCells) {
+                    if (lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax) return true;
+                }
+                return false;
+            }
 
-            function updateSectorsVisibility() {
-                pp8Layer.clearLayers();
-                pp6Layer.clearLayers();
-                if (!sectorsVisible) return;
-                let sectorsToShow = [];
-                if (filterByA && activeAKey && sectorsByA[activeAKey]) {
-                    const aSectors = sectorsByA[activeAKey];
-                    aSectors.pp8.forEach(poly => sectorsToShow.push({ polygon: poly, type: 'pp8' }));
-                    aSectors.pp6.forEach(poly => sectorsToShow.push({ polygon: poly, type: 'pp6' }));
+            function isPointInActiveASectors(lat, lon) {
+                if (!activeAKey || !sectorsByA[activeAKey]) return false;
+                const allPolys = [...sectorsByA[activeAKey].pp8, ...sectorsByA[activeAKey].pp6];
+                for (let poly of allPolys) {
+                    if (pointInPolygon(lat, lon, poly)) return true;
+                }
+                return false;
+            }
+
+            function isOwner() {
+                if (!currentUser) return false;
+                return currentUser.uid === OWNER_UID;
+            }
+
+            function updateOwnerUI() {
+                const isOwnerBool = isOwner();
+                const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB, #deleteBInA');
+                deleteBtns.forEach(btn => {
+                    if (isOwnerBool) {
+                        btn.classList.remove('delete-btn');
+                        btn.classList.add('owner-active');
+                    } else {
+                        btn.classList.remove('owner-active');
+                        btn.classList.add('delete-btn');
+                    }
+                });
+                const badge = document.getElementById('permissionBadge');
+                if (isOwnerBool) {
+                    badge.textContent = '👑 Vlasnik (dodavanje i brisanje)';
                 } else {
-                    allSectors.forEach(s => sectorsToShow.push(s));
+                    badge.textContent = '👀 Samo čitanje';
                 }
-                sectorsToShow.forEach(s => {
-                    if (s.type === 'pp8') pp8Layer.addLayer(s.polygon);
-                    else if (s.type === 'pp6') pp6Layer.addLayer(s.polygon);
-                });
-                document.querySelectorAll('#customControl button[data-filter]').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.filter === 'all' && !filterByA);
-                });
-                document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
-                updateBVisibility();
-            }
-
-            const markerData = [];
-            const addedCoords = {};
-            let totalSectors = 0;
-            const lines = csvData.split('\n');
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                const cols = line.split(',');
-                if (cols.length < 26) continue;
-                const fpgs = cols[0];
-                const lat = parseFloat(cols[1]);
-                const lon = parseFloat(cols[2]);
-                if (isNaN(lat) || isNaN(lon)) continue;
-                const key = lat + ',' + lon;
-                if (!addedCoords[key]) {
-                    addedCoords[key] = true;
-                    const marker = L.marker([lat, lon], { icon: aIcon })
-                        .addTo(markerLayer)
-                        .bindPopup(`<b>${fpgs}</b><br>lat: ${lat}, lon: ${lon}`);
-                    marker.on('mouseover', e => showHoverTooltip(fpgs, e.latlng));
-                    marker.on('mouseout', () => hideHoverTooltip());
-                    marker.on('click', function(e) {
-                        if (activeA) activeA.marker.setIcon(aIcon);
-                        activeA = { fpgs, lat, lon, marker };
-                        activeA.marker.setIcon(aSelectedIcon);
-                        activeAKey = fpgs;
-                        filterByA = true;
-                        document.getElementById('activeAName').textContent = fpgs;
-                        updateSectorsVisibility();
-                        updatePopups();
-                        if (firebaseInitialized) {
-                            activeARef.set({ fpgs: fpgs, lat: lat, lon: lon });
-                        }
-                        L.DomEvent.stopPropagation(e);
-                    });
-                    markerData.push({ fpgs, lat, lon, marker });
-                }
-                const aKey = fpgs;
-                if (!sectorsByA[aKey]) sectorsByA[aKey] = { pp8: [], pp6: [] };
-                const pp8Pairs = [
-                    [cols[5], cols[6]],
-                    [cols[7], cols[8]],
-                    [cols[9], cols[10]],
-                    [cols[11], cols[12]]
-                ];
-                pp8Pairs.forEach(([start, end]) => {
-                    if (start && end && start.trim() !== '' && end.trim() !== '') {
-                        const coords = generateSectorCoords(lat, lon, 8, 4, start, end);
-                        if (coords) {
-                            const polygon = L.polygon(coords, {
-                                color: '#cc0000',
-                                weight: 1.5,
-                                opacity: 0.8,
-                                fillColor: '#ff0000',
-                                fillOpacity: 0.1
-                            });
-                            allSectors.push({ polygon, type: 'pp8', aKey });
-                            sectorsByA[aKey].pp8.push(polygon);
-                            totalSectors++;
-                        }
-                    }
-                });
-                const pp6Pairs = [
-                    [cols[13], cols[14]],
-                    [cols[15], cols[16]],
-                    [cols[17], cols[18]],
-                    [cols[19], cols[20]]
-                ];
-                pp6Pairs.forEach(([start, end]) => {
-                    if (start && end && start.trim() !== '' && end.trim() !== '') {
-                        const coords = generateSectorCoords(lat, lon, 4.5, 2.25, start, end);
-                        if (coords) {
-                            const polygon = L.polygon(coords, {
-                                color: '#0000cc',
-                                weight: 1.5,
-                                opacity: 0.8,
-                                fillColor: '#0000ff',
-                                fillOpacity: 0.1
-                            });
-                            allSectors.push({ polygon, type: 'pp6', aKey });
-                            sectorsByA[aKey].pp6.push(polygon);
-                            totalSectors++;
-                        }
-                    }
-                });
-            }
-            document.getElementById('count').textContent = totalSectors;
-            updateSectorsVisibility();
-
-            document.querySelector('#customControl button[data-filter="all"]').addEventListener('click', function() {
-                filterByA = false;
-                if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
-                document.getElementById('activeAName').textContent = '-';
-                updateSectorsVisibility();
-                updatePopups();
-                if (firebaseInitialized) activeARef.set(null);
-            });
-            document.getElementById('toggleSectorsBtn').addEventListener('click', function() {
-                sectorsVisible = !sectorsVisible;
-                this.textContent = sectorsVisible ? '📐' : '📐🚫';
-                this.className = sectorsVisible ? 'sectors-on' : 'sectors-off';
-                updateSectorsVisibility();
-            });
-            document.getElementById('clearABtn').addEventListener('click', function() {
-                if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
-                filterByA = false;
-                document.getElementById('activeAName').textContent = '-';
-                updateSectorsVisibility();
-                updatePopups();
-                if (firebaseInitialized) activeARef.set(null);
-            });
-
-            const gridLayer = L.layerGroup().addTo(map);
-            const gridCells = [];
-            let selectedGridColor = null;
-            let greenCells = [], blueCells = [];
-
-            function saveGridColorsToFirebase() {
-                if (!firebaseInitialized) return;
-                const data = {
-                    greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
-                    blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
-                };
-                gridColorsRef.set(data).catch(err => console.warn('Firebase write error:', err));
-            }
-
-            function loadGridColorsFromFirebase() {
-                if (!firebaseInitialized) return;
-                gridColorsRef.once('value').then(snapshot => {
-                    const data = snapshot.val();
-                    if (data) {
-                        if (data.greenCells) {
-                            data.greenCells.forEach(c => {
-                                if (!greenCells.some(g => g.latMin === c.latMin && g.latMax === c.latMax &&
-                                        g.lonMin === c.lonMin && g.lonMax === c.lonMax)) {
-                                    greenCells.push(c);
-                                }
-                            });
-                        }
-                        if (data.blueCells) {
-                            data.blueCells.forEach(c => {
-                                if (!blueCells.some(b => b.latMin === c.latMin && b.latMax === c.latMax &&
-                                        b.lonMin === c.lonMin && b.lonMax === c.lonMax)) {
-                                    blueCells.push(c);
-                                }
-                            });
-                        }
-                        gridCells.forEach(rect => {
-                            const bounds = rect.getBounds();
-                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
-                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
-                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            rect.setStyle({
-                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
-                                weight: isGreen || isBlue ? 3 : 2
-                            });
-                        });
-                        console.log('Grid boje učitane.');
-                    }
-                }).catch(err => console.warn('Firebase read error:', err));
-            }
-
-            let gridColorsListener = null;
-            function listenGridColors() {
-                if (!firebaseInitialized) return;
-                if (gridColorsListener) gridColorsListener.off();
-                gridColorsListener = gridColorsRef;
-                gridColorsListener.on('value', snapshot => {
-                    const data = snapshot.val();
-                    if (data) {
-                        greenCells = [];
-                        blueCells = [];
-                        if (data.greenCells) {
-                            data.greenCells.forEach(c => {
-                                greenCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
-                            });
-                        }
-                        if (data.blueCells) {
-                            data.blueCells.forEach(c => {
-                                blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
-                            });
-                        }
-                        gridCells.forEach(rect => {
-                            const bounds = rect.getBounds();
-                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
-                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
-                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            rect.setStyle({
-                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
-                                weight: isGreen || isBlue ? 3 : 2
-                            });
-                        });
-                        const statusDiv = document.getElementById('status');
-                        statusDiv.textContent = 'Sinhronizovane boje kvadrata';
-                        statusDiv.style.display = 'block';
-                        setTimeout(() => statusDiv.style.display = 'none', 1000);
-                    }
-                });
-            }
-
-            function generateGrid() {
-                const latStart = 42.2, latEnd = 45.3 + 10/60, latStep = 10/60;
-                const lonStart = 16, lonEnd = 20 + 15/60, lonStep = 15/60;
-                let redIndex = 0;
-                for (let lat = latStart; lat < latEnd; lat += latStep) {
-                    let stupacIndex = 0;
-                    for (let lon = lonStart; lon < lonEnd; lon += lonStep) {
-                        const bounds = [[lat, lon], [lat + latStep, lon + lonStep]];
-                        const rect = L.rectangle(bounds, { color: 'black', weight: 2, fillOpacity: 0, interactive: true });
-                        const latMin = lat, latMax = lat + latStep, lonMin = lon, lonMax = lon + lonStep;
-                        const redBroj = 29 - redIndex;
-                        const slovoCode = 68 + stupacIndex + (stupacIndex >= 13 ? 1 : 0);
-                        const slovo = String.fromCharCode(slovoCode);
-                        const id = slovo + redBroj;
-                        rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
-                        rect.on('mouseout', () => hideHoverTooltip());
-                        rect.on('click', function(e) {
-                            if (selectedGridColor) {
-                                let color = selectedGridColor === 'green' ? '#00ff00' :
-                                            selectedGridColor === 'blue' ? '#0055ff' : '#ff0000';
-                                this.setStyle({ color, weight: 3 });
-                                if (selectedGridColor === 'green') {
-                                    if (!greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                            c.lonMin === lonMin && c.lonMax === lonMax))
-                                        greenCells.push({ latMin, latMax, lonMin, lonMax });
-                                    const idx = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idx !== -1) blueCells.splice(idx, 1);
-                                } else if (selectedGridColor === 'blue') {
-                                    if (!blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                            c.lonMin === lonMin && c.lonMax === lonMax))
-                                        blueCells.push({ latMin, latMax, lonMin, lonMax });
-                                    const idx = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idx !== -1) greenCells.splice(idx, 1);
-                                } else {
-                                    const idxG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idxG !== -1) greenCells.splice(idxG, 1);
-                                    const idxB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idxB !== -1) blueCells.splice(idxB, 1);
-                                }
-                                saveGridColorsToFirebase();
-                                L.DomEvent.stopPropagation(e);
-                            }
-                        });
-                        rect.on('contextmenu', function(e) {
-                            this.setStyle({ color: 'black', weight: 2 });
-                            const idxG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            if (idxG !== -1) greenCells.splice(idxG, 1);
-                            const idxB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            if (idxB !== -1) blueCells.splice(idxB, 1);
-                            saveGridColorsToFirebase();
-                            L.DomEvent.stopPropagation(e);
-                            L.DomEvent.preventDefault(e);
-                        });
-                        rect.addTo(gridLayer);
-                        gridCells.push(rect);
-                        stupacIndex++;
-                    }
-                    redIndex++;
-                }
-            }
-            generateGrid();
-
-            ['gridBlue','gridGreen','gridRed'].forEach(id => {
-                document.getElementById(id).addEventListener('click', function() {
-                    const color = id === 'gridBlue' ? 'blue' : id === 'gridGreen' ? 'green' : 'red';
-                    if (this.classList.contains('active')) {
-                        this.classList.remove('active');
-                        if (selectedGridColor === color) selectedGridColor = null;
-                    } else {
-                        this.classList.add('active');
-                        ['gridBlue','gridGreen','gridRed'].forEach(c => {
-                            if (c !== id) document.getElementById(c).classList.remove('active');
-                        });
-                        selectedGridColor = color;
-                    }
-                });
-            });
-            document.getElementById('gridReset').addEventListener('click', function() {
-                gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2 }));
-                greenCells = [];
-                blueCells = [];
-                saveGridColorsToFirebase();
-            });
-
-            let selectedPP8 = 0, selectedPP8X = 0, selectedTD6B = 0, selectedTD6BX = 0;
-            let bPoints = [];
-            let bLayer = L.layerGroup().addTo(map);
-            let bCounter = 0;
-            let deleteMode = false;
-
-            const deleteBtn = document.getElementById('deleteSelectedB');
-            deleteBtn.addEventListener('click', function() {
-                if (!isOwner()) {
-                    alert('Samo vlasnik može brisati B tačke.');
-                    return;
-                }
-                deleteMode = !deleteMode;
-                this.classList.toggle('delete-mode');
-                this.textContent = deleteMode ? '❌B (aktivan)' : '❌B';
-            });
-
-            const bIcon = L.divIcon({
-                className: 'b-marker',
-                html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
-                iconSize: [16, 16],
-                iconAnchor: [8, 8]
-            });
-            const bIconGray = L.divIcon({
-                className: 'b-marker-gray',
-                html: '<div style="width:10px;height:10px;background:#999;border-radius:50%;border:2px solid #ccc;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
-                iconSize: [14, 14],
-                iconAnchor: [7, 7]
-            });
-
-            function updatePopups() {
-                document.getElementById('bCount').textContent = bPoints.length;
-                document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
-                updateBVisibility();
-            }
-
-            function updateBVisibility() {
-                if (!activeA) {
-                    bPoints.forEach(row => {
-                        if (row.marker) {
-                            row.marker.setIcon(bIcon);
-                            row.marker.setOpacity(1);
-                        }
-                    });
-                    document.getElementById('bInACount').textContent = '0';
-                    return;
-                }
-                const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) {
-                    bPoints.forEach(row => {
-                        if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); }
-                    });
-                    document.getElementById('bInACount').textContent = '0';
-                    return;
-                }
-                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                let insideCount = 0;
-                bPoints.forEach(row => {
-                    const lat = row.bLat, lon = row.bLon;
-                    let inside = false;
-                    for (let poly of allPolys) {
-                        if (pointInPolygon(lat, lon, poly)) { inside = true; break; }
-                    }
-                    if (inside) {
-                        row.marker.setIcon(bIcon);
-                        row.marker.setOpacity(1);
-                        insideCount++;
-                    } else {
-                        row.marker.setIcon(bIconGray);
-                        row.marker.setOpacity(0.5);
-                    }
-                });
-                document.getElementById('bInACount').textContent = insideCount;
             }
 
             function saveBPointsToFirebase() {
                 if (!firebaseInitialized) return;
+                if (!isOwner()) return;
+                if (!bPointsRef) return;
                 const data = bPoints.map(row => ({
                     bIndex: row.bIndex,
                     bLat: row.bLat,
@@ -756,10 +416,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function deleteBPoint(row) {
-                if (!isOwner()) {
-                    alert('Samo vlasnik može brisati.');
-                    return;
-                }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati.'); return; }
                 if (row.marker) bLayer.removeLayer(row.marker);
                 const idx = bPoints.indexOf(row);
                 if (idx !== -1) bPoints.splice(idx, 1);
@@ -776,10 +433,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function clearBPoints() {
-                if (!isOwner()) {
-                    alert('Samo vlasnik može obrisati sve B tačke.');
-                    return;
-                }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
                 bLayer.clearLayers();
                 bPoints = [];
                 bCounter = 0;
@@ -797,15 +451,12 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function deleteBInA() {
-                if (!isOwner()) {
-                    alert('Samo vlasnik može brisati B tačke unutar A.');
-                    return;
-                }
-                if (!activeA) { alert('Prvo izaberite A marker.'); return; }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati B tačke unutar A.'); return; }
+                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
                 const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) { alert('Nema sektora za ovaj A.'); return; }
+                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
                 const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                if (allPolys.length === 0) { alert('Ovaj A nema sektore.'); return; }
+                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
                 const toDelete = bPoints.filter(row => {
                     const lat = row.bLat, lon = row.bLon;
                     for (let poly of allPolys) {
@@ -813,11 +464,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     }
                     return false;
                 });
-                if (toDelete.length === 0) {
-                    alert('Nema B tačaka unutar aktivnog A.');
-                    return;
-                }
-                if (!confirm(`Obrisati ${toDelete.length} B tačaka unutar A (${activeA.fpgs})?`)) return;
+                if (toDelete.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A.'); return; }
+                if (!confirm(`⚠️ Obrisati ${toDelete.length} B tačaka unutar A (${activeA.fpgs})?`)) return;
                 toDelete.forEach(row => {
                     if (row.marker) bLayer.removeLayer(row.marker);
                     const idx = bPoints.indexOf(row);
@@ -826,15 +474,15 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 updatePopups();
                 if (tableOverlay.style.display === 'block') renderTable();
                 saveBPointsToFirebase();
-                alert(`Obrisano ${toDelete.length} B tačaka.`);
+                alert(`✅ Obrisano ${toDelete.length} B tačaka unutar A (${activeA.fpgs}).`);
             }
 
             function exportBInA() {
-                if (!activeA) { alert('Prvo izaberite A marker.'); return; }
+                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
                 const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) { alert('Nema sektora za ovaj A.'); return; }
+                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
                 const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                if (allPolys.length === 0) { alert('Ovaj A nema sektore.'); return; }
+                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
                 const insidePoints = bPoints.filter(row => {
                     const lat = row.bLat, lon = row.bLon;
                     for (let poly of allPolys) {
@@ -842,10 +490,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     }
                     return false;
                 });
-                if (insidePoints.length === 0) {
-                    alert('Nema B tačaka unutar aktivnog A za export.');
-                    return;
-                }
+                if (insidePoints.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A za export.'); return; }
                 const excelData = insidePoints.map(row => ({
                     'B redni': row.bIndex,
                     'B lat': row.bLat.toFixed(6),
@@ -892,18 +537,166 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     const seconds = String(now.getSeconds()).padStart(2,'0');
                     const fileName = `B_za_A_${activeA.fpgs}_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
                     XLSX.writeFile(wb, fileName, { cellStyles: true });
-                    alert(`Izvezeno ${insidePoints.length} B tačaka za A (${activeA.fpgs}) u fajl:\n${fileName}`);
+                    alert(`✅ Izvezeno ${insidePoints.length} B tačaka za A (${activeA.fpgs}) u fajl:\n${fileName}`);
                 } catch (e) {
-                    alert('Greška pri exportu:\n' + e.message);
-                    console.error(e);
+                    alert('❌ Greška pri exportu:\n' + e.message);
+                    console.error('Export greška:', e);
                 }
             }
 
-            document.getElementById('deleteBInA').addEventListener('click', deleteBInA);
-            document.getElementById('exportBInA').addEventListener('click', exportBInA);
+            // ===== ADD B POINT =====
+            function addBPoint(lat, lon) {
+                if (!isOwner()) {
+                    alert('⚠️ Samo vlasnik može dodavati B tačke.');
+                    return;
+                }
+                if (!activeA) {
+                    alert('Prvo kliknite na A marker za centar.');
+                    return;
+                }
+                if (!isPointInsideColoredCell(lat, lon)) {
+                    alert('Tačka B mora biti unutar ZELENO obojene ćelije.');
+                    return;
+                }
+                const dist = haversine(activeA.lat, activeA.lon, lat, lon);
+                if (dist > 10) {
+                    alert('Udaljenost od aktivnog A je veća od 10 km. Nije dozvoljeno.');
+                    return;
+                }
+                if (isPointInActiveASectors(lat, lon)) {
+                    alert('Tačka B se nalazi unutar sektora (PP8 ili PP6) aktivnog A. Nije dozvoljeno.');
+                    return;
+                }
+                bCounter++;
+                const now = new Date(), timeStr = now.toLocaleString();
+                const az = bearing(activeA.lat, activeA.lon, lat, lon);
+                const row = {
+                    bIndex: bCounter,
+                    bLat: lat,
+                    bLon: lon,
+                    bDate: now,
+                    bTime: timeStr,
+                    aName: activeA.fpgs,
+                    az: az,
+                    dist: dist,
+                    pp8: selectedPP8,
+                    td6b: selectedTD6B,
+                    pp8x: 0,
+                    td6bx: 0,
+                    confirmationTime: null,
+                    confirmationDate: null,
+                    marker: null
+                };
+                bPoints.push(row);
+                const popupInitial =
+                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
+                const marker = L.marker([lat, lon], { icon: bIcon })
+                    .addTo(bLayer)
+                    .bindPopup(popupInitial);
+                marker.on('mouseover', e => {
+                    const prefix = row.confirmationTime ? 'B#' : 'B$';
+                    showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
+                    hoveringBRow = row;
+                    updateMouseAzimuth(e.latlng);
+                });
+                marker.on('mouseout', () => {
+                    hideHoverTooltip();
+                    hoveringBRow = null;
+                    if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                });
+                row.marker = marker;
+                marker.on('contextmenu', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    L.DomEvent.preventDefault(e);
+                    if (!row.confirmationTime) {
+                        const pp8x = selectedPP8X, td6bx = selectedTD6BX;
+                        const confirmNow = new Date();
+                        row.pp8x = pp8x;
+                        row.td6bx = td6bx;
+                        row.confirmationDate = confirmNow;
+                        row.confirmationTime = confirmNow.toLocaleString();
+                        const popupConfirmed =
+                            `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
+                        marker.setPopupContent(popupConfirmed);
+                        if (hoveringBRow === row) {
+                            showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
+                            updateMouseAzimuth(e.latlng);
+                        }
+                        saveBPointsToFirebase();
+                        if (tableOverlay.style.display === 'block') renderTable();
+                    } else alert('Već potvrđeno.');
+                });
+                marker.on('click', function(e) {
+                    if (deleteMode) {
+                        deleteBPoint(row);
+                        L.DomEvent.stopPropagation(e);
+                        L.DomEvent.preventDefault(e);
+                    }
+                });
+                updatePopups();
+                updateMouseInfo();
+                if (tableOverlay.style.display === 'block') renderTable();
+                saveBPointsToFirebase();
+            }
 
+            // ===== B VISIBILITY =====
+            function updateBVisibility() {
+                if (!activeA) {
+                    bPoints.forEach(row => {
+                        if (row.marker) {
+                            row.marker.setIcon(bIcon);
+                            row.marker.setOpacity(1);
+                        }
+                    });
+                    document.getElementById('bInACount').textContent = '0';
+                    return;
+                }
+                const aSectors = sectorsByA[activeAKey];
+                if (!aSectors) {
+                    bPoints.forEach(row => {
+                        if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); }
+                    });
+                    document.getElementById('bInACount').textContent = '0';
+                    return;
+                }
+                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
+                let insideCount = 0;
+                bPoints.forEach(row => {
+                    const lat = row.bLat, lon = row.bLon;
+                    let inside = false;
+                    for (let poly of allPolys) {
+                        if (pointInPolygon(lat, lon, poly)) { inside = true; break; }
+                    }
+                    if (inside) {
+                        row.marker.setIcon(bIcon);
+                        row.marker.setOpacity(1);
+                        insideCount++;
+                    } else {
+                        row.marker.setIcon(bIconGray);
+                        row.marker.setOpacity(0.5);
+                    }
+                });
+                document.getElementById('bInACount').textContent = insideCount;
+            }
+
+            function updatePopups() {
+                document.getElementById('bCount').textContent = bPoints.length;
+                document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
+                updateBVisibility();
+            }
+
+            // ===== LOAD B FROM FIREBASE =====
             function loadBPointsFromFirebase() {
-                if (!firebaseInitialized) return;
+                if (!firebaseInitialized) {
+                    showError('Firebase nije inicijalizovan.');
+                    hideLoading();
+                    return;
+                }
+                if (!bPointsRef) {
+                    showError('Referenca na bazu nije dostupna.');
+                    hideLoading();
+                    return;
+                }
                 bPointsRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data && Array.isArray(data)) {
@@ -981,14 +774,23 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         updatePopups();
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
-                        console.log('B tačke učitane:', bPoints.length);
+                        console.log('B tačke učitane iz Firebase:', bPoints.length);
+                    } else {
+                        console.log('Nema sačuvanih B tačaka.');
                     }
-                }).catch(err => console.warn('Firebase read error:', err));
+                    hideLoading();
+                }).catch(err => {
+                    console.error('Firebase read error:', err);
+                    showError('Greška pri učitavanju podataka: ' + err.message);
+                    hideLoading();
+                });
             }
 
+            // ===== LISTEN B =====
             let bPointsListener = null;
             function listenBPoints() {
                 if (!firebaseInitialized) return;
+                if (!bPointsRef) return;
                 if (bPointsListener) bPointsListener.off();
                 bPointsListener = bPointsRef;
                 bPointsListener.on('value', snapshot => {
@@ -1069,123 +871,212 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
                         const statusDiv = document.getElementById('status');
-                        statusDiv.textContent = 'Sinhronizovane B tačke';
+                        statusDiv.textContent = '🔥 Sinhronizovane B tačke';
                         statusDiv.style.display = 'block';
                         setTimeout(() => statusDiv.style.display = 'none', 1000);
                     }
                 });
             }
 
-            function addBPoint(lat, lon) {
-                if (!activeA) { alert('Prvo kliknite na A marker za centar.'); return; }
-                if (!isPointInsideColoredCell(lat, lon)) {
-                    alert('Tačka B mora biti unutar zeleno ili plavo obojene ćelije.');
-                    return;
+            // ===== SECTORS =====
+            function updateSectorsVisibility() {
+                pp8Layer.clearLayers();
+                pp6Layer.clearLayers();
+                if (!sectorsVisible) return;
+                let sectorsToShow = [];
+                if (filterByA && activeAKey && sectorsByA[activeAKey]) {
+                    const aSectors = sectorsByA[activeAKey];
+                    aSectors.pp8.forEach(poly => sectorsToShow.push({ polygon: poly, type: 'pp8' }));
+                    aSectors.pp6.forEach(poly => sectorsToShow.push({ polygon: poly, type: 'pp6' }));
+                } else {
+                    allSectors.forEach(s => sectorsToShow.push(s));
                 }
-                const dist = haversine(activeA.lat, activeA.lon, lat, lon);
-                if (dist > 10) { alert('Udaljenost od aktivnog A je veća od 10 km. Nije dozvoljeno.'); return; }
-                if (isPointInActiveASectors(lat, lon)) {
-                    alert('Tačka B se nalazi unutar sektora (PP8 ili PP6) aktivnog A. Nije dozvoljeno.');
-                    return;
-                }
-                bCounter++;
-                const now = new Date(), timeStr = now.toLocaleString();
-                const az = bearing(activeA.lat, activeA.lon, lat, lon);
-                const row = {
-                    bIndex: bCounter,
-                    bLat: lat,
-                    bLon: lon,
-                    bDate: now,
-                    bTime: timeStr,
-                    aName: activeA.fpgs,
-                    az: az,
-                    dist: dist,
-                    pp8: selectedPP8,
-                    td6b: selectedTD6B,
-                    pp8x: 0,
-                    td6bx: 0,
-                    confirmationTime: null,
-                    confirmationDate: null,
-                    marker: null
+                sectorsToShow.forEach(s => {
+                    if (s.type === 'pp8') pp8Layer.addLayer(s.polygon);
+                    else if (s.type === 'pp6') pp6Layer.addLayer(s.polygon);
+                });
+                document.querySelectorAll('#customControl button[data-filter]').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.filter === 'all' && !filterByA);
+                });
+                document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
+                updateBVisibility();
+            }
+
+            // ===== GRID =====
+            const gridLayer = L.layerGroup().addTo(map);
+            function saveGridColorsToFirebase() {
+                if (!firebaseInitialized) return;
+                if (!isOwner()) return;
+                if (!gridColorsRef) return;
+                const data = {
+                    greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
+                    blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
                 };
-                bPoints.push(row);
-                const popupInitial =
-                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
-                const marker = L.marker([lat, lon], { icon: bIcon })
-                    .addTo(bLayer)
-                    .bindPopup(popupInitial);
-                marker.on('mouseover', e => {
-                    const prefix = row.confirmationTime ? 'B#' : 'B$';
-                    showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
-                    hoveringBRow = row;
-                    updateMouseAzimuth(e.latlng);
-                });
-                marker.on('mouseout', () => {
-                    hideHoverTooltip();
-                    hoveringBRow = null;
-                    if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
-                });
-                row.marker = marker;
-                marker.on('contextmenu', function(e) {
-                    L.DomEvent.stopPropagation(e);
-                    L.DomEvent.preventDefault(e);
-                    if (!row.confirmationTime) {
-                        const pp8x = selectedPP8X, td6bx = selectedTD6BX;
-                        const confirmNow = new Date();
-                        row.pp8x = pp8x;
-                        row.td6bx = td6bx;
-                        row.confirmationDate = confirmNow;
-                        row.confirmationTime = confirmNow.toLocaleString();
-                        const popupConfirmed =
-                            `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
-                        marker.setPopupContent(popupConfirmed);
-                        if (hoveringBRow === row) {
-                            showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
-                            updateMouseAzimuth(e.latlng);
+                gridColorsRef.set(data).catch(err => console.warn('Firebase write error:', err));
+            }
+
+            function loadGridColorsFromFirebase() {
+                if (!firebaseInitialized) return;
+                if (!gridColorsRef) return;
+                gridColorsRef.once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (data) {
+                        if (data.greenCells) {
+                            data.greenCells.forEach(c => {
+                                if (!greenCells.some(g => g.latMin === c.latMin && g.latMax === c.latMax &&
+                                        g.lonMin === c.lonMin && g.lonMax === c.lonMax)) {
+                                    greenCells.push(c);
+                                }
+                            });
                         }
-                        saveBPointsToFirebase();
-                        if (tableOverlay.style.display === 'block') renderTable();
-                    } else alert('Već potvrđeno.');
-                });
-                marker.on('click', function(e) {
-                    if (deleteMode) {
-                        deleteBPoint(row);
-                        L.DomEvent.stopPropagation(e);
-                        L.DomEvent.preventDefault(e);
+                        if (data.blueCells) {
+                            data.blueCells.forEach(c => {
+                                if (!blueCells.some(b => b.latMin === c.latMin && b.latMax === c.latMax &&
+                                        b.lonMin === c.lonMin && b.lonMax === c.lonMax)) {
+                                    blueCells.push(c);
+                                }
+                            });
+                        }
+                        gridCells.forEach(rect => {
+                            const bounds = rect.getBounds();
+                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
+                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
+                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            rect.setStyle({
+                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
+                                weight: isGreen || isBlue ? 3 : 2
+                            });
+                        });
+                        console.log('Grid boje učitane iz Firebase.');
+                    }
+                }).catch(err => console.warn('Firebase read error:', err));
+            }
+
+            let gridColorsListener = null;
+            function listenGridColors() {
+                if (!firebaseInitialized) return;
+                if (!gridColorsRef) return;
+                if (gridColorsListener) gridColorsListener.off();
+                gridColorsListener = gridColorsRef;
+                gridColorsListener.on('value', snapshot => {
+                    const data = snapshot.val();
+                    if (data) {
+                        greenCells = [];
+                        blueCells = [];
+                        if (data.greenCells) {
+                            data.greenCells.forEach(c => {
+                                greenCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
+                            });
+                        }
+                        if (data.blueCells) {
+                            data.blueCells.forEach(c => {
+                                blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
+                            });
+                        }
+                        gridCells.forEach(rect => {
+                            const bounds = rect.getBounds();
+                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
+                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
+                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            rect.setStyle({
+                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
+                                weight: isGreen || isBlue ? 3 : 2
+                            });
+                        });
+                        const statusDiv = document.getElementById('status');
+                        statusDiv.textContent = '🔥 Sinhronizovane boje kvadrata';
+                        statusDiv.style.display = 'block';
+                        setTimeout(() => statusDiv.style.display = 'none', 1000);
                     }
                 });
-                updatePopups();
-                updateMouseInfo();
-                if (tableOverlay.style.display === 'block') renderTable();
-                saveBPointsToFirebase();
             }
 
-            function isPointInsideColoredCell(lat, lon) {
-                for (let c of greenCells) {
-                    if (lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax) return true;
+            function generateGrid() {
+                const latStart = 42.2, latEnd = 45.3 + 10/60, latStep = 10/60;
+                const lonStart = 16, lonEnd = 20 + 15/60, lonStep = 15/60;
+                let redIndex = 0;
+                for (let lat = latStart; lat < latEnd; lat += latStep) {
+                    let stupacIndex = 0;
+                    for (let lon = lonStart; lon < lonEnd; lon += lonStep) {
+                        const bounds = [[lat, lon], [lat + latStep, lon + lonStep]];
+                        const rect = L.rectangle(bounds, { color: 'black', weight: 2, fillOpacity: 0, interactive: true });
+                        const latMin = lat, latMax = lat + latStep, lonMin = lon, lonMax = lon + lonStep;
+                        const redBroj = 29 - redIndex;
+                        const slovoCode = 68 + stupacIndex + (stupacIndex >= 13 ? 1 : 0);
+                        const slovo = String.fromCharCode(slovoCode);
+                        const id = slovo + redBroj;
+                        rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
+                        rect.on('mouseout', () => hideHoverTooltip());
+                        rect.on('click', function(e) {
+                            if (!isOwner()) {
+                                alert('⚠️ Samo vlasnik može mijenjati boje.');
+                                return;
+                            }
+                            if (selectedGridColor) {
+                                let color = selectedGridColor === 'green' ? '#00ff00' :
+                                            selectedGridColor === 'blue' ? '#0055ff' : '#ff0000';
+                                this.setStyle({ color, weight: 3 });
+                                if (selectedGridColor === 'green') {
+                                    if (!greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                            c.lonMin === lonMin && c.lonMax === lonMax))
+                                        greenCells.push({ latMin, latMax, lonMin, lonMax });
+                                    const idx = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
+                                        c.lonMin === lonMin && c.lonMax === lonMax);
+                                    if (idx !== -1) blueCells.splice(idx, 1);
+                                } else if (selectedGridColor === 'blue') {
+                                    if (!blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                            c.lonMin === lonMin && c.lonMax === lonMax))
+                                        blueCells.push({ latMin, latMax, lonMin, lonMax });
+                                    const idx = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
+                                        c.lonMin === lonMin && c.lonMax === lonMax);
+                                    if (idx !== -1) greenCells.splice(idx, 1);
+                                } else { // red
+                                    const idxG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
+                                        c.lonMin === lonMin && c.lonMax === lonMax);
+                                    if (idxG !== -1) greenCells.splice(idxG, 1);
+                                    const idxB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
+                                        c.lonMin === lonMin && c.lonMax === lonMax);
+                                    if (idxB !== -1) blueCells.splice(idxB, 1);
+                                }
+                                saveGridColorsToFirebase();
+                                L.DomEvent.stopPropagation(e);
+                            }
+                        });
+                        rect.on('contextmenu', function(e) {
+                            if (!isOwner()) {
+                                alert('⚠️ Samo vlasnik može brisati boje.');
+                                return;
+                            }
+                            this.setStyle({ color: 'black', weight: 2 });
+                            const idxG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            if (idxG !== -1) greenCells.splice(idxG, 1);
+                            const idxB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            if (idxB !== -1) blueCells.splice(idxB, 1);
+                            saveGridColorsToFirebase();
+                            L.DomEvent.stopPropagation(e);
+                            L.DomEvent.preventDefault(e);
+                        });
+                        rect.addTo(gridLayer);
+                        gridCells.push(rect);
+                        stupacIndex++;
+                    }
+                    redIndex++;
                 }
-                for (let c of blueCells) {
-                    if (lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax) return true;
-                }
-                return false;
             }
+            generateGrid();
 
-            function isPointInActiveASectors(lat, lon) {
-                if (!activeAKey || !sectorsByA[activeAKey]) return false;
-                const allPolys = [...sectorsByA[activeAKey].pp8, ...sectorsByA[activeAKey].pp6];
-                for (let poly of allPolys) {
-                    if (pointInPolygon(lat, lon, poly)) return true;
-                }
-                return false;
-            }
-
+            // ===== TOOLTIP =====
             const hoverTooltip = document.getElementById('hoverTooltip');
             const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
-            let hoveringBRow = null;
-            let lastMouseLatLng = null;
-            let pngImgWidth = null, pngImgHeight = null;
             const PNG_BOUNDS = [[41.46974424083233, 15.46096394958954], [45.96991870077077, 21.66292597350616]];
-            let currentKmzName = null, currentKmzModified = null, currentKmzSize = null;
 
             function showHoverTooltip(text, latlng) {
                 hoverTooltip.textContent = text;
@@ -1251,6 +1142,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
             }
 
+            // ===== DROPDOWN =====
             function setupDropdown(btnId, contentId, callback) {
                 const btn = document.getElementById(btnId);
                 const content = document.getElementById(contentId);
@@ -1278,7 +1170,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             setupDropdown('td6bDropdownBtn', 'td6bDropdownContent', v => selectedTD6B = v);
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
 
-            let pngOverlay = null, pngVisible = false;
+            // ===== PNG =====
             const radarToggle = document.getElementById('radarToggle');
             const statusDiv = document.getElementById('status');
 
@@ -1291,7 +1183,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     pngVisible = true;
                     radarToggle.textContent = '🖼️';
                     radarToggle.className = 'radar-on';
-                    statusDiv.textContent = `PNG (${pngImgWidth}×${pngImgHeight} px)`;
+                    statusDiv.textContent = `✅ PNG (${pngImgWidth}×${pngImgHeight} px)`;
                     statusDiv.style.display = 'block';
                     setTimeout(() => statusDiv.style.display = 'none', 2000);
                 };
@@ -1301,7 +1193,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     pngVisible = true;
                     radarToggle.textContent = '🖼️';
                     radarToggle.className = 'radar-on';
-                    statusDiv.textContent = 'PNG (dimenzije nepoznate)';
+                    statusDiv.textContent = '✅ PNG (dimenzije nepoznate)';
                     statusDiv.style.display = 'block';
                     setTimeout(() => statusDiv.style.display = 'none', 2000);
                 };
@@ -1330,7 +1222,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             pngEntry.async('blob').then(function(blob) {
                                 const url = URL.createObjectURL(blob);
                                 loadPngFromUrl(url);
-                                statusDiv.textContent = 'PNG iz KMZ učitano';
+                                statusDiv.textContent = '✅ PNG iz KMZ učitano';
                                 statusDiv.style.display = 'block';
                                 setTimeout(() => statusDiv.style.display = 'none', 2000);
                             });
@@ -1364,12 +1256,13 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 if (!file) return;
                 const url = URL.createObjectURL(file);
                 loadPngFromUrl(url);
-                statusDiv.textContent = `PNG ručno: ${file.name}`;
+                statusDiv.textContent = `✅ PNG ručno: ${file.name}`;
                 statusDiv.style.display = 'block';
                 setTimeout(() => statusDiv.style.display = 'none', 2000);
                 this.value = '';
             });
 
+            // ===== TABELA =====
             const tableOverlay = document.getElementById('tableOverlay');
             const tableWrapper = document.getElementById('tableWrapper');
 
@@ -1420,7 +1313,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
 
             document.getElementById('openTableTabBtn').addEventListener('click', function() {
                 const data = buildTableData();
-                if (data.length === 0) { alert('Nema podataka za prikaz.'); return; }
+                if (data.length === 0) { alert('❌ Nema podataka za prikaz.'); return; }
                 let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tabela A-B</title>';
                 html += '<style>body{font-family:sans-serif;padding:15px;max-width:70%;margin:0 auto;background:#f9f9f9;}';
                 html += 'table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;box-shadow:0 0 10px rgba(0,0,0,0.1);}';
@@ -1439,7 +1332,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 html += '</tbody></table></body></html>';
                 const newWindow = window.open('', '_blank');
                 if (newWindow) { newWindow.document.write(html); newWindow.document.close(); }
-                else alert('Iskačući prozor je blokiran.');
+                else alert('❌ Iskačući prozor je blokiran.');
             });
 
             document.getElementById('closeTableBtn').addEventListener('click', function() {
@@ -1448,7 +1341,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
 
             document.getElementById('exportExcelBtn').addEventListener('click', function() {
                 const data = buildTableData();
-                if (data.length === 0) { alert('Nema podataka za export.'); return; }
+                if (data.length === 0) { alert('❌ Nema podataka za export.'); return; }
                 try {
                     const ws = XLSX.utils.json_to_sheet(data);
                     const wb = XLSX.utils.book_new();
@@ -1462,21 +1355,89 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     const seconds = String(now.getSeconds()).padStart(2,'0');
                     const fileName = `presjek_AB_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
                     XLSX.writeFile(wb, fileName);
-                    alert('Excel fajl uspješno sačuvan:\n' + fileName);
-                } catch (e) { alert('Greška pri exportu:\n' + e.message); }
+                    alert('✅ Excel fajl uspješno sačuvan:\n' + fileName);
+                } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
             });
 
+            // ===== EVENTI ZA BRISANJE =====
             document.getElementById('clearBbtn').addEventListener('click', function() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
+                if (bPoints.length === 0) { alert('ℹ️ Nema tačaka B za brisanje.'); return; }
+                if (!confirm(`⚠️ Obrisati svih ${bPoints.length} tačaka B?`)) return;
+                clearBPoints();
+                alert('✅ Sve B tačke su obrisane.');
+            });
+
+            const deleteBtn = document.getElementById('deleteSelectedB');
+            deleteBtn.addEventListener('click', function() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati B tačke.'); return; }
+                deleteMode = !deleteMode;
+                this.classList.toggle('delete-mode');
+                this.textContent = deleteMode ? '❌B (aktivan)' : '❌B';
+            });
+
+            document.getElementById('deleteBInA').addEventListener('click', deleteBInA);
+            document.getElementById('exportBInA').addEventListener('click', exportBInA);
+
+            // ===== FILTERI =====
+            document.querySelector('#customControl button[data-filter="all"]').addEventListener('click', function() {
+                filterByA = false;
+                if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
+                document.getElementById('activeAName').textContent = '-';
+                updateSectorsVisibility();
+                updatePopups();
+                if (firebaseInitialized && activeARef) activeARef.set(null);
+            });
+
+            document.getElementById('toggleSectorsBtn').addEventListener('click', function() {
+                sectorsVisible = !sectorsVisible;
+                this.textContent = sectorsVisible ? '📐' : '📐🚫';
+                this.className = sectorsVisible ? 'sectors-on' : 'sectors-off';
+                updateSectorsVisibility();
+            });
+
+            document.getElementById('clearABtn').addEventListener('click', function() {
+                if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
+                filterByA = false;
+                document.getElementById('activeAName').textContent = '-';
+                updateSectorsVisibility();
+                updatePopups();
+                if (firebaseInitialized && activeARef) activeARef.set(null);
+            });
+
+            // ===== GRID DUGMAD =====
+            ['gridBlue','gridGreen','gridRed'].forEach(id => {
+                document.getElementById(id).addEventListener('click', function() {
+                    if (!isOwner()) {
+                        alert('⚠️ Samo vlasnik može mijenjati boje.');
+                        return;
+                    }
+                    const color = id === 'gridBlue' ? 'blue' : id === 'gridGreen' ? 'green' : 'red';
+                    if (this.classList.contains('active')) {
+                        this.classList.remove('active');
+                        if (selectedGridColor === color) selectedGridColor = null;
+                    } else {
+                        this.classList.add('active');
+                        ['gridBlue','gridGreen','gridRed'].forEach(c => {
+                            if (c !== id) document.getElementById(c).classList.remove('active');
+                        });
+                        selectedGridColor = color;
+                    }
+                });
+            });
+
+            document.getElementById('gridReset').addEventListener('click', function() {
                 if (!isOwner()) {
-                    alert('Samo vlasnik može obrisati sve B tačke.');
+                    alert('⚠️ Samo vlasnik može resetovati boje.');
                     return;
                 }
-                if (bPoints.length === 0) { alert('Nema tačaka B za brisanje.'); return; }
-                if (!confirm(`Obrisati svih ${bPoints.length} tačaka B?`)) return;
-                clearBPoints();
-                alert('Sve B tačke su obrisane.');
+                gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2 }));
+                greenCells = [];
+                blueCells = [];
+                saveGridColorsToFirebase();
             });
 
+            // ===== REFRESH =====
             const refreshBtn = document.getElementById('refreshBtn');
             async function loadFromServer(endpoint = '/api/latest-png') {
                 try {
@@ -1493,12 +1454,12 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     const blob = new Blob([byteArray], { type: data.mimeType || 'image/png' });
                     const url = URL.createObjectURL(blob);
                     loadPngFromUrl(url);
-                    statusDiv.textContent = `Server: ${data.name} (${new Date(data.modified).toLocaleString()})`;
+                    statusDiv.textContent = `✅ Server: ${data.name} (${new Date(data.modified).toLocaleString()})`;
                     statusDiv.style.display = 'block';
                     setTimeout(() => statusDiv.style.display = 'none', 3000);
                     if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                     return true;
-                } catch (error) { console.error(error); return false; }
+                } catch (error) { console.error('❌ Greška pri učitavanju sa servera:', error); return false; }
             }
             async function loadKmzFromServer() { return await loadFromServer('/api/latest-kmz-png'); }
             setTimeout(async () => { await loadKmzFromServer(); }, 1000);
@@ -1508,6 +1469,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 this.textContent = '🔄'; this.disabled = false;
             });
 
+            // ===== FIREBASE LISTENERI =====
             const bPointsRef = firebaseDb ? firebaseDb.ref('bPoints') : null;
             const gridColorsRef = firebaseDb ? firebaseDb.ref('gridColors') : null;
             const activeARef = firebaseDb ? firebaseDb.ref('activeA') : null;
@@ -1543,16 +1505,147 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         }
                     });
                 }
-                console.log('Slušanje Firebase podataka aktivirano.');
+                console.log('📡 Slušanje Firebase podataka aktivirano.');
             }
 
             function stopListening() {
                 if (bPointsListener) { bPointsListener.off(); bPointsListener = null; }
                 if (gridColorsListener) { gridColorsListener.off(); gridColorsListener = null; }
-                console.log('Slušanje zaustavljeno.');
+                console.log('📡 Slušanje zaustavljeno.');
             }
 
-            console.log('Aplikacija učitana.');
+            // ===== ANONIMNA PRIJAVA =====
+            function anonimnaPrijava() {
+                auth.signInAnonymously()
+                    .then((userCredential) => {
+                        currentUser = userCredential.user;
+                        console.log('✅ Prijavljen anonimno, UID:', currentUser.uid);
+                        updateOwnerUI();
+                        if (firebaseInitialized) {
+                            startListening();
+                            loadBPointsFromFirebase();
+                            loadGridColorsFromFirebase();
+                            listenGridColors();
+                        } else {
+                            showError('Firebase nije inicijalizovan, ali prijava je uspela.');
+                            hideLoading();
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('❌ Anonimna prijava neuspješna:', error);
+                        showError('Greška pri anonimnoj prijavi: ' + error.message + '<br><br>Provjerite da li je anonimna autentifikacija omogućena u Firebase konzoli.');
+                        hideLoading();
+                    });
+            }
+
+            // ===== PARSE CSV I KREIRANJE A MARKERA =====
+            const markerData = [];
+            const addedCoords = {};
+            let totalSectors = 0;
+            const lines = csvData.split('\n');
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const cols = line.split(',');
+                if (cols.length < 26) continue;
+                const fpgs = cols[0];
+                const lat = parseFloat(cols[1]);
+                const lon = parseFloat(cols[2]);
+                if (isNaN(lat) || isNaN(lon)) continue;
+                const key = lat + ',' + lon;
+                if (!addedCoords[key]) {
+                    addedCoords[key] = true;
+                    const marker = L.marker([lat, lon], { icon: aIcon })
+                        .addTo(markerLayer)
+                        .bindPopup(`<b>${fpgs}</b><br>lat: ${lat}, lon: ${lon}`);
+                    marker.on('mouseover', e => showHoverTooltip(fpgs, e.latlng));
+                    marker.on('mouseout', () => hideHoverTooltip());
+                    marker.on('click', function(e) {
+                        if (activeA) activeA.marker.setIcon(aIcon);
+                        activeA = { fpgs, lat, lon, marker };
+                        activeA.marker.setIcon(aSelectedIcon);
+                        activeAKey = fpgs;
+                        filterByA = true;
+                        document.getElementById('activeAName').textContent = fpgs;
+                        updateSectorsVisibility();
+                        updatePopups();
+                        if (firebaseInitialized && activeARef) {
+                            activeARef.set({ fpgs: fpgs, lat: lat, lon: lon });
+                        }
+                        L.DomEvent.stopPropagation(e);
+                    });
+                    markerData.push({ fpgs, lat, lon, marker });
+                }
+                const aKey = fpgs;
+                if (!sectorsByA[aKey]) sectorsByA[aKey] = { pp8: [], pp6: [] };
+                const pp8Pairs = [
+                    [cols[5], cols[6]],
+                    [cols[7], cols[8]],
+                    [cols[9], cols[10]],
+                    [cols[11], cols[12]]
+                ];
+                pp8Pairs.forEach(([start, end]) => {
+                    if (start && end && start.trim() !== '' && end.trim() !== '') {
+                        const coords = generateSectorCoords(lat, lon, 8, 4, start, end);
+                        if (coords) {
+                            const polygon = L.polygon(coords, {
+                                color: '#cc0000',
+                                weight: 1.5,
+                                opacity: 0.8,
+                                fillColor: '#ff0000',
+                                fillOpacity: 0.1
+                            });
+                            allSectors.push({ polygon, type: 'pp8', aKey });
+                            sectorsByA[aKey].pp8.push(polygon);
+                            totalSectors++;
+                        }
+                    }
+                });
+                const pp6Pairs = [
+                    [cols[13], cols[14]],
+                    [cols[15], cols[16]],
+                    [cols[17], cols[18]],
+                    [cols[19], cols[20]]
+                ];
+                pp6Pairs.forEach(([start, end]) => {
+                    if (start && end && start.trim() !== '' && end.trim() !== '') {
+                        const coords = generateSectorCoords(lat, lon, 4.5, 2.25, start, end);
+                        if (coords) {
+                            const polygon = L.polygon(coords, {
+                                color: '#0000cc',
+                                weight: 1.5,
+                                opacity: 0.8,
+                                fillColor: '#0000ff',
+                                fillOpacity: 0.1
+                            });
+                            allSectors.push({ polygon, type: 'pp6', aKey });
+                            sectorsByA[aKey].pp6.push(polygon);
+                            totalSectors++;
+                        }
+                    }
+                });
+            }
+            document.getElementById('count').textContent = totalSectors;
+            updateSectorsVisibility();
+
+            // ===== B ICONS =====
+            const bIcon = L.divIcon({
+                className: 'b-marker',
+                html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            const bIconGray = L.divIcon({
+                className: 'b-marker-gray',
+                html: '<div style="width:10px;height:10px;background:#999;border-radius:50%;border:2px solid #ccc;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+
+            // ===== POKRENI ANONIMNU PRIJAVU =====
+            anonimnaPrijava();
+
+            console.log('✅ Planseta pokrenuta.');
         });
     </script>
 </body>
