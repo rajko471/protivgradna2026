@@ -2,10 +2,9 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – Uloge (Vlasnik / Potvrđivač)</title>
+    <title>Planseta</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* ===== STILOVI (isti kao ranije) ===== */
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
         #map { height:100%; width:100%; cursor: crosshair; }
         #loginOverlay {
@@ -54,7 +53,8 @@
         .delete-btn { opacity: 0.5; cursor: not-allowed; }
         .delete-btn.owner-active { opacity: 1; cursor: pointer; }
         .delete-btn.owner-active:hover { background: #f0f0f0; }
-        .disabled-role { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+        .delete-btn.confirmer-active { opacity: 0.7; cursor: pointer; }
+        .delete-btn.confirmer-active:hover { background: #e0e0e0; }
         .dropdown-container { position: relative; display: inline-block; overflow: visible; }
         .dropdown-content {
             display: none; position: absolute; top: 100%; left: 0; margin-top: 2px;
@@ -106,16 +106,6 @@
             font-size: 12px; z-index: 1000; pointer-events: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
-        /* Dugme za osvježavanje boja */
-        #refreshColorsBtn {
-            background: #6c757d;
-            color: #fff;
-            font-size: 10px;
-            border-color: #6c757d;
-        }
-        #refreshColorsBtn:hover {
-            background: #5a6268;
-        }
         @media (max-width:600px) {
             .custom-control { left: 10px; padding: 4px 6px 4px 8px; gap: 2px; max-height: 80vh; }
             .custom-control button, .custom-control .dropdown-btn { width: 22px; height: 22px; font-size: 10px; line-height: 22px; }
@@ -156,7 +146,6 @@
     <div id="hoverTooltip"></div>
 
     <div class="custom-control" id="customControl">
-        <!-- Svi dugmad -->
         <button class="active" data-filter="all">S</button>
         <span class="separator"></span>
         <button id="toggleMapBtn" class="map-on" title="Prikaži/sakrij mapu">🗺️</button>
@@ -171,15 +160,14 @@
         <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
-        <!-- DUGMAD ZA BRISANJE (samo za vlasnika) -->
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B">🗑️</button>
-        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B">❌B</button>
+        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (klik na marker)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
         <button id="deleteBInA" class="delete-btn" title="Obriši sve B tačke unutar aktivnog A" style="background:#dc3545;color:#fff;">🗑️A</button>
+        <button id="exportBInA" title="Izvezi B tačke unutar aktivnog A u Excel" style="background:#28a745;color:#fff;">📊A</button>
         <span class="separator"></span>
         <button id="toggleSectorsBtn" class="sectors-on" title="Prikaži/sakrij sektore">📐</button>
         <span class="separator"></span>
-        <!-- Dropdownovi -->
         <div class="dropdown-container" id="pp8DropdownContainer">
             <button id="pp8DropdownBtn" class="dropdown-btn" title="Odaberi PP8 sektor (0-4)">P8</button>
             <div id="pp8DropdownContent" class="dropdown-content">
@@ -213,14 +201,10 @@
             </div>
         </div>
         <span class="separator"></span>
-        <!-- Dugmad za bojenje (samo vlasnik) -->
         <button id="gridBlue" class="grid-blue" title="Uključi/isključi plavo bojenje okvira">🟦</button>
         <button id="gridGreen" title="Uključi/isključi zeleno bojenje okvira">🟩</button>
         <button id="gridRed" title="Uključi/isključi crveno bojenje okvira">🟥</button>
         <button id="gridReset" title="Vrati sve okvire na crno">⬛</button>
-        <span class="separator"></span>
-        <!-- DUGME ZA OSVJEŽAVANJE BOJA (dostupno svima) -->
-        <button id="refreshColorsBtn" title="Osvježi boje kvadrata iz Firebase">🔄</button>
     </div>
 
     <div id="info">Sektora: <span id="count">0</span> | B: <span id="bCount">0</span> | U A: <span id="bInACount">0</span> | Centar A: <span id="activeAName">-</span></div>
@@ -248,10 +232,12 @@
         document.addEventListener('DOMContentLoaded', function() {
 
             // ================================================================
-            // 🔑 POSTAVITE UID-ove OVDJE
+            // 🔑 DEFINICIJA KORISNIKA
             // ================================================================
-            const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
-            const CONFIRMER_UID = '5i19NJeJ8bRwCT50Ng4yIMLPukf2';
+            // OWNER (potpuni vlasnik) – tvoj UID
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';
+            // CONFIRMER (samo potvrđuje i bira broj raketa) – OVDJE UNESI DRUGI UID
+            const CONFIRMER_UID = 'YOUR_CONFIRMER_UID_HERE';
 
             // ================================================================
             // 🔥 FIREBASE
@@ -282,7 +268,6 @@
 
             const auth = firebase.auth();
             let currentUser = null;
-            let userRole = 'readonly';
 
             // ================================================================
             // 📌 MAPA I DOM REFERENCE
@@ -303,7 +288,7 @@
             const tableOverlay = document.getElementById('tableOverlay');
 
             // ================================================================
-            // 📦 POMOĆNE FUNKCIJE (geometrija)
+            // 📦 POMOĆNE FUNKCIJE
             // ================================================================
             const KM_PER_DEG_LAT = 111.32;
             function destination(lat, lon, bearingDeg, distanceKm) {
@@ -451,7 +436,7 @@
             let bPointsListener = null, gridColorsListener = null;
 
             // ================================================================
-            // 📋 CSV (samo prva tačka)
+            // 📋 CSV (samo prva tačka radi testa)
             // ================================================================
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501`;
@@ -572,67 +557,84 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             });
             const bIconGray = L.divIcon({
                 className: 'b-marker-gray',
-                html: '<div style="width:10px;height:10px;background:#1a237e;border-radius:50%;border:2px solid #3f51b5;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
+                html: '<div style="width:10px;height:10px;background:#999;border-radius:50%;border:2px solid #ccc;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
                 iconSize: [14, 14],
                 iconAnchor: [7, 7]
             });
 
             // ================================================================
-            // 🎯 FUNKCIJE ZA ULOGE
+            // FUNKCIJE ZA PROVJERU ULOGA
             // ================================================================
-            function updateRole() {
-                if (!currentUser) {
-                    userRole = 'readonly';
-                } else if (currentUser.uid === OWNER_UID) {
-                    userRole = 'owner';
-                } else if (currentUser.uid === CONFIRMER_UID) {
-                    userRole = 'confirmer';
-                } else {
-                    userRole = 'readonly';
-                }
-                window.__userRole = userRole;
-                updateUIForRole();
-                updateBVisibility();
-                console.log('🔑 Uloga:', userRole);
-            }
-
             function isOwner() {
-                return userRole === 'owner';
+                if (!currentUser) return false;
+                return currentUser.uid === OWNER_UID;
             }
 
             function isConfirmer() {
-                return userRole === 'confirmer' || userRole === 'owner';
+                if (!currentUser) return false;
+                return currentUser.uid === CONFIRMER_UID;
             }
 
-            function updateUIForRole() {
+            function canConfirm() {
+                return isOwner() || isConfirmer();
+            }
+
+            function canAddB() {
+                return isOwner();
+            }
+
+            function canDeleteB() {
+                return isOwner();
+            }
+
+            function canChangeGridColors() {
+                return isOwner();
+            }
+
+            function updateOwnerUI() {
+                const isOwnerBool = isOwner();
+                const isConfirmerBool = isConfirmer();
+
+                // Dugmad za brisanje – samo vlasnik
+                const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB, #deleteBInA');
+                deleteBtns.forEach(btn => {
+                    if (isOwnerBool) {
+                        btn.classList.remove('delete-btn');
+                        btn.classList.add('owner-active');
+                    } else {
+                        btn.classList.remove('owner-active');
+                        btn.classList.add('delete-btn');
+                    }
+                });
+
+                // Dugmad za bojenje – samo vlasnik
+                const gridBtns = document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset');
+                gridBtns.forEach(btn => {
+                    if (isOwnerBool) {
+                        btn.style.opacity = '1';
+                        btn.style.cursor = 'pointer';
+                    } else {
+                        btn.style.opacity = '0.3';
+                        btn.style.cursor = 'not-allowed';
+                    }
+                });
+
+                // Dugmad za export i tabelu – dostupna svima
+                // Dropdownovi za odabir raketa – dostupni svima (ali samo confirmer/owner mogu potvrditi)
+
                 const badge = document.getElementById('permissionBadge');
-                if (userRole === 'owner') {
+                if (isOwnerBool) {
                     badge.textContent = '👑 Vlasnik (sve dozvole)';
-                } else if (userRole === 'confirmer') {
-                    badge.textContent = '✅ Potvrđivač (samo potvrda)';
+                } else if (isConfirmerBool) {
+                    badge.textContent = '✅ Potvrđivač (odabir raketa i potvrda B)';
                 } else {
                     badge.textContent = '👀 Samo čitanje';
                 }
-
-                const ownerOnlyBtns = ['clearBbtn', 'deleteSelectedB', 'deleteBInA', 'gridBlue', 'gridGreen', 'gridRed', 'gridReset'];
-                ownerOnlyBtns.forEach(id => {
-                    const btn = document.getElementById(id);
-                    if (btn) {
-                        if (userRole === 'owner') {
-                            btn.classList.remove('disabled-role');
-                            btn.style.opacity = '1';
-                            btn.style.pointerEvents = 'auto';
-                        } else {
-                            btn.classList.add('disabled-role');
-                            btn.style.opacity = '0.4';
-                            btn.style.pointerEvents = 'none';
-                        }
-                    }
-                });
+                console.log('Status ažuriran. Vlasnik?', isOwnerBool, 'Potvrđivač?', isConfirmerBool);
             }
 
             // ================================================================
-            // FUNKCIJE ZA B TAČKE (sa ulogama)
+            // FUNKCIJE ZA B TAČKE
             // ================================================================
             function isPointInsideColoredCell(lat, lon) {
                 for (let c of greenCells) {
@@ -735,6 +737,73 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 alert(`✅ Obrisano ${toDelete.length} B tačaka unutar A (${activeA.fpgs}).`);
             }
 
+            function exportBInA() {
+                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
+                const aSectors = sectorsByA[activeAKey];
+                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
+                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
+                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
+                const insidePoints = bPoints.filter(row => {
+                    const lat = row.bLat, lon = row.bLon;
+                    for (let poly of allPolys) {
+                        if (pointInPolygon(lat, lon, poly)) return true;
+                    }
+                    return false;
+                });
+                if (insidePoints.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A za export.'); return; }
+                const excelData = insidePoints.map(row => ({
+                    'B redni': row.bIndex,
+                    'B lat': row.bLat.toFixed(6),
+                    'B lon': row.bLon.toFixed(6),
+                    'Vrijeme B': formatTimeHHMMSS(row.bDate),
+                    'A naziv': row.aName,
+                    'Azimut (°)': row.az.toFixed(1),
+                    'Udaljenost (km)': row.dist.toFixed(1),
+                    'PP8': row.pp8,
+                    'TD6B': row.td6b,
+                    'PP8X': row.confirmationTime ? row.pp8x : '-',
+                    'TD6BX': row.confirmationTime ? row.td6bx : '-',
+                    'ПОТВЕРДА': row.confirmationDate ? formatTimeHHMMSS(row.confirmationDate) : '-'
+                }));
+                try {
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    const range = XLSX.utils.decode_range(ws['!ref']);
+                    for (let R = range.s.r; R <= range.e.r; R++) {
+                        for (let C = range.s.c; C <= range.e.c; C++) {
+                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            if (!ws[addr]) continue;
+                            if (!ws[addr].s) ws[addr].s = {};
+                            ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
+                        }
+                    }
+                    ws['!cols'] = [];
+                    const headers = Object.keys(excelData[0]);
+                    headers.forEach((h, i) => {
+                        let maxLen = h.length;
+                        excelData.forEach(row => {
+                            const val = String(row[h]);
+                            if (val.length > maxLen) maxLen = val.length;
+                        });
+                        ws['!cols'].push({ wch: Math.min(Math.max(maxLen + 2, 12), 30) });
+                    });
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, `B_za_A_${activeA.fpgs}`);
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth()+1).padStart(2,'0');
+                    const day = String(now.getDate()).padStart(2,'0');
+                    const hours = String(now.getHours()).padStart(2,'0');
+                    const minutes = String(now.getMinutes()).padStart(2,'0');
+                    const seconds = String(now.getSeconds()).padStart(2,'0');
+                    const fileName = `B_za_A_${activeA.fpgs}_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
+                    XLSX.writeFile(wb, fileName, { cellStyles: true });
+                    alert(`✅ Izvezeno ${insidePoints.length} B tačaka za A (${activeA.fpgs}) u fajl:\n${fileName}`);
+                } catch (e) {
+                    alert('❌ Greška pri exportu:\n' + e.message);
+                    console.error('Export greška:', e);
+                }
+            }
+
             // ================================================================
             // ADD B POINT (samo vlasnik)
             // ================================================================
@@ -800,7 +869,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 marker.on('contextmenu', function(e) {
                     L.DomEvent.stopPropagation(e);
                     L.DomEvent.preventDefault(e);
-                    if (!isConfirmer()) {
+                    if (!canConfirm()) {
                         alert('⚠️ Nemate dozvolu za potvrđivanje B tačaka.');
                         return;
                     }
@@ -873,7 +942,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         insideCount++;
                     } else {
                         row.marker.setIcon(bIconGray);
-                        row.marker.setOpacity(0.6);
+                        row.marker.setOpacity(0.5);
                     }
                 });
                 document.getElementById('bInACount').textContent = insideCount;
@@ -909,7 +978,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             // ================================================================
-            // GRID (samo vlasnik)
+            // GRID
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
@@ -920,7 +989,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
                 };
                 gridColorsRef.set(data).catch(err => console.warn('Firebase write error:', err));
-                console.log('💾 Boje sačuvane u Firebase');
             }
 
             function loadGridColorsFromFirebase() {
@@ -928,38 +996,38 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 gridColorsRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data) {
-                        greenCells = [];
-                        blueCells = [];
                         if (data.greenCells) {
                             data.greenCells.forEach(c => {
-                                greenCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
+                                if (!greenCells.some(g => g.latMin === c.latMin && g.latMax === c.latMax &&
+                                        g.lonMin === c.lonMin && g.lonMax === c.lonMax)) {
+                                    greenCells.push(c);
+                                }
                             });
                         }
                         if (data.blueCells) {
                             data.blueCells.forEach(c => {
-                                blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
+                                if (!blueCells.some(b => b.latMin === c.latMin && b.latMax === c.latMax &&
+                                        b.lonMin === c.lonMin && b.lonMax === c.lonMax)) {
+                                    blueCells.push(c);
+                                }
                             });
                         }
-                        applyGridColors();
-                        console.log('🔄 Boje učitane iz Firebase (ručno)');
+                        gridCells.forEach(rect => {
+                            const bounds = rect.getBounds();
+                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
+                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
+                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            rect.setStyle({
+                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
+                                weight: isGreen || isBlue ? 3 : 2
+                            });
+                        });
+                        console.log('Grid boje učitane iz Firebase.');
                     }
                 }).catch(err => console.warn('Firebase read error:', err));
-            }
-
-            function applyGridColors() {
-                gridCells.forEach(rect => {
-                    const bounds = rect.getBounds();
-                    const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
-                          lonMin = bounds.getWest(), lonMax = bounds.getEast();
-                    const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                        c.lonMin === lonMin && c.lonMax === lonMax);
-                    const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                        c.lonMin === lonMin && c.lonMax === lonMax);
-                    rect.setStyle({
-                        color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
-                        weight: isGreen || isBlue ? 3 : 2
-                    });
-                });
             }
 
             function listenGridColors() {
@@ -981,11 +1049,22 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                                 blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
                             });
                         }
-                        applyGridColors();
+                        gridCells.forEach(rect => {
+                            const bounds = rect.getBounds();
+                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
+                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
+                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
+                                c.lonMin === lonMin && c.lonMax === lonMax);
+                            rect.setStyle({
+                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
+                                weight: isGreen || isBlue ? 3 : 2
+                            });
+                        });
                         statusDiv.textContent = '🔥 Sinhronizovane boje kvadrata';
                         statusDiv.style.display = 'block';
                         setTimeout(() => statusDiv.style.display = 'none', 1000);
-                        console.log('📡 Boje ažurirane iz Firebase listenera');
                     }
                 });
             }
@@ -1118,8 +1197,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             marker.on('contextmenu', function(e) {
                                 L.DomEvent.stopPropagation(e);
                                 L.DomEvent.preventDefault(e);
-                                if (!isConfirmer()) {
-                                    alert('⚠️ Nemate dozvolu za potvrđivanje.');
+                                if (!canConfirm()) {
+                                    alert('⚠️ Nemate dozvolu za potvrđivanje B tačaka.');
                                     return;
                                 }
                                 if (!row.confirmationTime) {
@@ -1214,8 +1293,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             marker.on('contextmenu', function(e) {
                                 L.DomEvent.stopPropagation(e);
                                 L.DomEvent.preventDefault(e);
-                                if (!isConfirmer()) {
-                                    alert('⚠️ Nemate dozvolu za potvrđivanje.');
+                                if (!canConfirm()) {
+                                    alert('⚠️ Nemate dozvolu za potvrđivanje B tačaka.');
                                     return;
                                 }
                                 if (!row.confirmationTime) {
@@ -1445,8 +1524,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             });
 
             document.getElementById('deleteBInA').addEventListener('click', deleteBInA);
+            document.getElementById('exportBInA').addEventListener('click', exportBInA);
 
-            // Grid dugmad (samo vlasnik)
+            // Grid dugmad
             ['gridBlue','gridGreen','gridRed'].forEach(id => {
                 document.getElementById(id).addEventListener('click', function() {
                     if (!isOwner()) {
@@ -1476,14 +1556,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 greenCells = [];
                 blueCells = [];
                 saveGridColorsToFirebase();
-            });
-
-            // Dugme za osvježavanje boja (dostupno svima)
-            document.getElementById('refreshColorsBtn').addEventListener('click', function() {
-                loadGridColorsFromFirebase();
-                statusDiv.textContent = '🔄 Boje osvježene';
-                statusDiv.style.display = 'block';
-                setTimeout(() => statusDiv.style.display = 'none', 1500);
             });
 
             // Dropdown
@@ -1650,9 +1722,17 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     currentUser = user;
                     loginOverlay.style.display = 'none';
                     console.log('👤 Prijavljen:', user.email, 'UID:', user.uid);
+                    // Provjera UID-a
+                    if (user.uid === OWNER_UID) {
+                        console.log('👑 Vi ste VLASNIK!');
+                    } else if (user.uid === CONFIRMER_UID) {
+                        console.log('✅ Vi ste POTVRĐIVAČ!');
+                    } else {
+                        console.log('👀 Vi ste posmatrač (samo čitanje).');
+                    }
                     setTimeout(() => {
-                        updateRole();
-                    }, 500);
+                        updateOwnerUI();
+                    }, 300);
                     if (firebaseInitialized) {
                         bPointsRef = firebaseDb.ref('bPoints');
                         gridColorsRef = firebaseDb.ref('gridColors');
@@ -1665,8 +1745,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 } else {
                     currentUser = null;
                     loginOverlay.style.display = 'flex';
-                    userRole = 'readonly';
-                    updateUIForRole();
+                    updateOwnerUI();
                 }
             });
 
@@ -1674,9 +1753,10 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             // 🚀 POKRENI
             // ================================================================
             updateSectorsVisibility();
-            console.log('✅ Planseta sa ulogama pokrenuta.');
+            console.log('✅ Planseta pokrenuta.');
             console.log('👑 Vlasnik UID:', OWNER_UID);
             console.log('✅ Potvrđivač UID:', CONFIRMER_UID);
+            console.log('💡 Ako je CONFIRMER_UID = YOUR_CONFIRMER_UID_HERE, postavite ga.');
         });
     </script>
 </body>
