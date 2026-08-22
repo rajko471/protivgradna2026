@@ -2,10 +2,9 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – Uloge i sinhronizacija</title>
+    <title>Planseta – 3 uloge</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* ===== STILOVI (isti kao ranije, ali skraćeno radi preglednosti) ===== */
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
         #map { height:100%; width:100%; cursor: crosshair; }
         #loginOverlay {
@@ -51,9 +50,14 @@
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control .separator { width: 70%; height: 1px; background: #ccc; margin: 2px 0; }
         .custom-control input[type="file"] { display: none; }
+        /* Dugmad za brisanje - samo vlasnik */
         .delete-btn { opacity: 0.5; cursor: not-allowed; }
         .delete-btn.owner-active { opacity: 1; cursor: pointer; }
         .delete-btn.owner-active:hover { background: #f0f0f0; }
+        /* Dugmad za kvadrate - vlasnik ili urednik kvadrata */
+        .grid-btn { opacity: 0.5; cursor: not-allowed; }
+        .grid-btn.grid-active { opacity: 1; cursor: pointer; }
+        .grid-btn.grid-active:hover { background: #f0f0f0; }
         .dropdown-container { position: relative; display: inline-block; overflow: visible; }
         .dropdown-content {
             display: none; position: absolute; top: 100%; left: 0; margin-top: 2px;
@@ -159,6 +163,7 @@
         <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
+        <!-- Dugmad za B - samo vlasnik -->
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
         <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
@@ -167,6 +172,7 @@
         <span class="separator"></span>
         <button id="toggleSectorsBtn" class="sectors-on" title="Prikaži/sakrij sektore">📐</button>
         <span class="separator"></span>
+        <!-- Dropdownovi -->
         <div class="dropdown-container" id="pp8DropdownContainer">
             <button id="pp8DropdownBtn" class="dropdown-btn" title="Odaberi PP8 sektor (0-4)">P8</button>
             <div id="pp8DropdownContent" class="dropdown-content">
@@ -200,10 +206,11 @@
             </div>
         </div>
         <span class="separator"></span>
-        <button id="gridBlue" class="grid-blue" title="Uključi/isključi plavo bojenje okvira (samo vlasnik)">🟦</button>
-        <button id="gridGreen" class="grid-green" title="Uključi/isključi zeleno bojenje okvira (samo vlasnik)">🟩</button>
-        <button id="gridRed" class="grid-red" title="Uključi/isključi crveno bojenje okvira (samo vlasnik)">🟥</button>
-        <button id="gridReset" class="grid-reset" title="Vrati sve okvire na crno (samo vlasnik)">⬛</button>
+        <!-- Dugmad za kvadrate - vlasnik ili urednik kvadrata -->
+        <button id="gridBlue" class="grid-btn" title="Uključi/isključi plavo bojenje okvira">🟦</button>
+        <button id="gridGreen" class="grid-btn" title="Uključi/isključi zeleno bojenje okvira">🟩</button>
+        <button id="gridRed" class="grid-btn" title="Uključi/isključi crveno bojenje okvira">🟥</button>
+        <button id="gridReset" class="grid-btn" title="Vrati sve okvire na crno">⬛</button>
     </div>
 
     <div id="info">Sektora: <span id="count">0</span> | B: <span id="bCount">0</span> | U A: <span id="bInACount">0</span> | Centar A: <span id="activeAName">-</span></div>
@@ -233,8 +240,9 @@
             // ================================================================
             // 🔑 ULOGE – POSTAVITE STVARNE UID-OVE
             // ================================================================
-            const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';  // Zamijenite sa vašim UID-om (vlasnik)
-            const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';           // Zamijenite sa UID-om potvrđivača (npr. drugi nalog)
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';      // Vlasnik (sve)
+            const CONFIRMER_UID = 'DRUGI_UID_OVDJE';               // Potvrđivač (samo potvrda)
+            const GRID_EDITOR_UID = 'TRECI_UID_OVDJE';             // Urednik kvadrata (samo bojenje)
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -572,13 +580,23 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 return currentUser.uid === CONFIRMER_UID;
             }
 
+            function isGridEditor() {
+                if (!currentUser) return false;
+                return currentUser.uid === GRID_EDITOR_UID;
+            }
+
             function canConfirm() {
                 return isOwner() || isConfirmer();
+            }
+
+            function canEditGrid() {
+                return isOwner() || isGridEditor();
             }
 
             function updateOwnerUI() {
                 const isOwnerBool = isOwner();
                 const isConfirmerBool = isConfirmer();
+                const isGridEditorBool = isGridEditor();
 
                 // Dugmad za brisanje i dodavanje – samo vlasnik
                 const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB, #deleteBInA');
@@ -592,27 +610,34 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     }
                 });
 
-                // Dugmad za bojenje kvadrata – samo vlasnik
+                // Dugmad za kvadrate – vlasnik ili urednik kvadrata
                 const gridBtns = document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset');
                 gridBtns.forEach(btn => {
-                    btn.style.opacity = isOwnerBool ? '1' : '0.3';
-                    btn.style.cursor = isOwnerBool ? 'pointer' : 'not-allowed';
+                    if (isOwnerBool || isGridEditorBool) {
+                        btn.classList.remove('grid-btn');
+                        btn.classList.add('grid-active');
+                    } else {
+                        btn.classList.remove('grid-active');
+                        btn.classList.add('grid-btn');
+                    }
                 });
 
                 // Badge
                 const badge = document.getElementById('permissionBadge');
                 if (isOwnerBool) {
-                    badge.textContent = '👑 Vlasnik (dodavanje, brisanje, bojenje)';
+                    badge.textContent = '👑 Vlasnik (sve dozvole)';
                 } else if (isConfirmerBool) {
                     badge.textContent = '✅ Potvrđivač (desni klik za potvrdu)';
+                } else if (isGridEditorBool) {
+                    badge.textContent = '🎨 Urednik kvadrata (bojenje)';
                 } else {
                     badge.textContent = '👀 Samo čitanje';
                 }
-                console.log('UI ažuriran. Vlasnik?', isOwnerBool, 'Potvrđivač?', isConfirmerBool);
+                console.log('UI ažuriran. Vlasnik?', isOwnerBool, 'Potvrđivač?', isConfirmerBool, 'Urednik kvadrata?', isGridEditorBool);
             }
 
             // ================================================================
-            // FUNKCIJE ZA B TAČKE
+            // FUNKCIJE ZA B TAČKE (samo vlasnik može dodavati/brisati)
             // ================================================================
             function isPointInsideColoredCell(lat, lon) {
                 for (let c of greenCells) {
@@ -630,12 +655,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 return false;
             }
 
+            // Čuvanje cijelog niza – samo vlasnik
             function saveBPointsToFirebase() {
-                if (!firebaseInitialized || !isOwner()) {
-                    console.warn('Samo vlasnik može sačuvati sve B tačke.');
-                    return;
-                }
-                if (!bPointsRef) return;
+                if (!firebaseInitialized || !isOwner() || !bPointsRef) return;
                 const data = bPoints.map(row => ({
                     bIndex: row.bIndex,
                     bLat: row.bLat,
@@ -655,7 +677,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 bPointsRef.set(data).catch(err => console.warn('Firebase write error:', err));
             }
 
-            // Funkcija za potvrđivanje – dostupna i vlasniku i potvrđivaču
+            // Potvrđivanje – dostupno vlasniku i potvrđivaču
             function confirmBPoint(row, marker) {
                 if (!canConfirm()) {
                     alert('⚠️ Nemate dozvolu za potvrđivanje.');
@@ -673,60 +695,25 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 row.confirmationDate = confirmNow;
                 row.confirmationTime = confirmNow.toLocaleString();
 
-                // Ažuriraj popup
                 const popupConfirmed =
                     `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
                 marker.setPopupContent(popupConfirmed);
 
-                // Ako je trenutno hover, osvježi tooltip
                 if (hoveringBRow === row) {
                     showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
                     updateMouseAzimuth(lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
                 }
 
-                // Snimi u Firebase (samo vlasnik može pisati cijeli niz, ali potvrđivač mora ažurirati)
-                // Pošto potvrđivač nema pravo pisanja cijelog niza, moramo koristiti transakciju ili update
-                // Rješenje: potvrđivač će upisati samo promjene na toj tački (koristimo child update)
+                // Snimi u Firebase – samo vlasnik može pisati cijeli niz,
+                // ali potvrđivač mora ažurirati. Zato ćemo koristiti transakciju:
+                // Pošto smo dozvolili pisanje svima, možemo jednostavno pozvati
+                // saveBPointsToFirebase() samo ako je vlasnik, a ako je potvrđivač,
+                // šaljemo zahtjev na 'confirmations' čvor.
                 if (firebaseInitialized && bPointsRef) {
-                    // Nađemo indeks tačke u bazi (po bIndex)
-                    // Pošto čuvamo ceo niz, moramo da ažuriramo ceo niz – ali samo vlasnik može.
-                    // Zato ćemo poslati zahtjev za ažuriranje cijelog niza, ali ako nije vlasnik, neće proći.
-                    // Umjesto toga, možemo da koristimo poseban čvor za potvrde (npr. confirmations)
-                    // Ali da pojednostavimo, dozvolićemo potvrđivaču da piše u zaseban čvor 'confirmations'
-                    // i onda će vlasnikov listener to uzeti.
-                    // Međutim, mi želimo da sve bude u istom nizu. Zato ćemo promijeniti pristup:
-                    // Umjesto da potvrđivač piše, on će slati zahtjev za potvrdu na poseban čvor,
-                    // a vlasnik (ili server) će to primijeniti.
-                    // Za sada, najjednostavnije: dozvolimo potvrđivaču da piše u 'bPoints' koristeći
-                    // Firebase pravila koja dozvoljavaju pisanje svima (auth != null).
-                    // Ali to smo već postavili. Zato možemo jednostavno pozvati saveBPointsToFirebase()
-                    // koja šalje cijeli niz. Međutim, potvrđivač nema pravo pisanja cijelog niza
-                    // (jer smo to ograničili na vlasnika). Zato ćemo umjesto toga koristiti
-                    // bPointsRef.child(row.bIndex).update() – ali to zahtijeva da svaka tačka ima svoj čvor.
-                    // Pošto mi čuvamo niz, najbolje je da potvrđivač pošalje zahtjev za potvrdu
-                    // na poseban čvor, a vlasnikova aplikacija će to primijeniti.
-                    // Međutim, za demo, možemo jednostavno pozvati saveBPointsToFirebase() samo ako je vlasnik.
-                    // Ako je potvrđivač, neće moći da sačuva, pa će promjena ostati samo lokalna.
-                    // Da bismo riješili, moramo promijeniti Firebase pravila da dozvole pisanje svima,
-                    // ali to nije sigurno. Najbolje je da potvrđivač piše u zaseban čvor 'pendingConfirmations',
-                    // a vlasnik će to čitati i primjenjivati.
-                    // Zbog složenosti, za sada ćemo dozvoliti potvrđivaču da piše u bPoints,
-                    // ali ćemo promijeniti pravila da dozvole pisanje samo vlasniku i potvrđivaču,
-                    // ili jednostavno ostaviti da svi mogu pisati (što smo već uradili).
-                    // Pošto smo postavili pravila na ".write": "auth != null", svi prijavljeni mogu pisati.
-                    // Zato možemo jednostavno pozvati saveBPointsToFirebase() čak i ako je potvrđivač.
-                    // Ali saveBPointsToFirebase() provjerava isOwner(), pa neće raditi.
-                    // Zato ćemo napraviti novu funkciju koja šalje samo tu jednu tačku (update).
-                    // Koristićemo bPointsRef.child(row.bIndex).update() – ali to zahtijeva da svaka tačka ima svoj ključ.
-                    // Pošto mi koristimo indeks kao bIndex, možemo koristiti bPointsRef.child(String(row.bIndex)).update(rowData)
-                    // Međutim, to će stvoriti čvorove sa indeksima, a ne niz.
-                    // Najbolje je da pređemo na strukturu gdje svaka tačka ima svoj push ID,
-                    // ali to bi zahtijevalo veće izmjene.
-                    // Zbog vremena, najjednostavnije rješenje: potvrđivač će slati poruku na 'confirmations' čvor,
-                    // a vlasnik će slušati taj čvor i ažurirati svoj niz.
-                    // Implementiraćemo to ovdje.
-                    // Pošalji zahtjev za potvrdu
-                    if (firebaseInitialized) {
+                    if (isOwner()) {
+                        saveBPointsToFirebase();
+                    } else {
+                        // Potvrđivač šalje zahtjev
                         const confirmRef = firebaseDb.ref('confirmations').push();
                         confirmRef.set({
                             bIndex: row.bIndex,
@@ -742,7 +729,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     }
                 }
 
-                // Ažuriraj tabelu ako je otvorena
                 if (tableOverlay.style.display === 'block') renderTable();
             }
 
@@ -808,7 +794,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                 });
                 row.marker = marker;
-                // Desni klik za potvrdu – dostupno i vlasniku i potvrđivaču
                 marker.on('contextmenu', function(e) {
                     L.DomEvent.stopPropagation(e);
                     L.DomEvent.preventDefault(e);
@@ -963,12 +948,12 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             // ================================================================
-            // GRID – samo vlasnik
+            // GRID – vlasnik ili urednik kvadrata
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
             function saveGridColorsToFirebase() {
-                if (!firebaseInitialized || !isOwner() || !gridColorsRef) return;
+                if (!firebaseInitialized || !canEditGrid() || !gridColorsRef) return;
                 const data = {
                     greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
                     blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
@@ -1071,8 +1056,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
                         rect.on('mouseout', () => hideHoverTooltip());
                         rect.on('click', function(e) {
-                            if (!isOwner()) {
-                                alert('⚠️ Samo vlasnik može mijenjati boje.');
+                            if (!canEditGrid()) {
+                                alert('⚠️ Samo vlasnik ili urednik kvadrata može mijenjati boje.');
                                 return;
                             }
                             if (selectedGridColor) {
@@ -1106,8 +1091,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             }
                         });
                         rect.on('contextmenu', function(e) {
-                            if (!isOwner()) {
-                                alert('⚠️ Samo vlasnik može brisati boje.');
+                            if (!canEditGrid()) {
+                                alert('⚠️ Samo vlasnik ili urednik kvadrata može brisati boje.');
                                 return;
                             }
                             this.setStyle({ color: 'black', weight: 2 });
@@ -1201,7 +1186,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 }).catch(err => console.warn('Firebase read error:', err));
             }
 
-            // Real-time listener za B tačke – OVO OSIGURAVA SINHRONIZACIJU
+            // Real-time listener za B tačke
             function listenBPoints() {
                 if (!firebaseInitialized || !bPointsRef) return;
                 if (bPointsListener) bPointsListener.off();
@@ -1209,7 +1194,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 bPointsListener.on('value', snapshot => {
                     const data = snapshot.val();
                     if (data && Array.isArray(data)) {
-                        // Ažuriraj lokalni niz i markere
                         bLayer.clearLayers();
                         bPoints = [];
                         bCounter = 0;
@@ -1267,10 +1251,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         });
                         updatePopups();
                         updateMouseInfo();
-                        // **OSVJEŽI TABELU AKO JE OTVORENA**
-                        if (tableOverlay.style.display === 'block') {
-                            renderTable();
-                        }
+                        if (tableOverlay.style.display === 'block') renderTable();
                         statusDiv.textContent = '🔥 Sinhronizovane B tačke';
                         statusDiv.style.display = 'block';
                         setTimeout(() => statusDiv.style.display = 'none', 1000);
@@ -1532,11 +1513,11 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
 
             document.getElementById('deleteBInA').addEventListener('click', deleteBInA);
 
-            // Grid dugmad
+            // Grid dugmad – sada koriste canEditGrid()
             ['gridBlue','gridGreen','gridRed'].forEach(id => {
                 document.getElementById(id).addEventListener('click', function() {
-                    if (!isOwner()) {
-                        alert('⚠️ Samo vlasnik može mijenjati boje.');
+                    if (!canEditGrid()) {
+                        alert('⚠️ Samo vlasnik ili urednik kvadrata može mijenjati boje.');
                         return;
                     }
                     const color = id === 'gridBlue' ? 'blue' : id === 'gridGreen' ? 'green' : 'red';
@@ -1554,8 +1535,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             });
 
             document.getElementById('gridReset').addEventListener('click', function() {
-                if (!isOwner()) {
-                    alert('⚠️ Samo vlasnik može resetovati boje.');
+                if (!canEditGrid()) {
+                    alert('⚠️ Samo vlasnik ili urednik kvadrata može resetovati boje.');
                     return;
                 }
                 gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2 }));
@@ -1591,8 +1572,6 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             setupDropdown('pp8xDropdownBtn', 'pp8xDropdownContent', v => selectedPP8X = v);
             setupDropdown('td6bDropdownBtn', 'td6bDropdownContent', v => selectedTD6B = v);
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
-
-            // PNG – preskačemo detalje zbog dužine (nije ključno za sinhronizaciju)
 
             // ================================================================
             // FIREBASE LISTENERI
@@ -1662,9 +1641,10 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             // 🚀 POKRENI
             // ================================================================
             updateSectorsVisibility();
-            console.log('✅ Planseta pokrenuta sa ulogama.');
+            console.log('✅ Planseta pokrenuta sa 3 uloge.');
             console.log('👑 Vlasnik UID:', OWNER_UID);
             console.log('✅ Potvrđivač UID:', CONFIRMER_UID);
+            console.log('🎨 Urednik kvadrata UID:', GRID_EDITOR_UID);
         });
     </script>
 </body>
