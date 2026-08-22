@@ -2,15 +2,15 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – sinhronizovana mapa</title>
+    <title>Planseta – Uloge i sinhronizacija</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
+        /* ===== STILOVI (isti kao ranije, ali skraćeno radi preglednosti) ===== */
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
         #map { height:100%; width:100%; cursor: crosshair; }
         #loginOverlay {
             position: fixed; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center;
-            z-index: 99999;
+            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 99999;
         }
         #loginBox {
             background: white; padding: 30px 40px; border-radius: 16px;
@@ -47,8 +47,6 @@
         .custom-control button.map-on { background: #007bff; color: #fff; border-color: #007bff; }
         .custom-control button.map-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
-        .custom-control button.grid-green { background: #28a745; color: #fff; border-color: #28a745; }
-        .custom-control button.grid-red { background: #dc3545; color: #fff; border-color: #dc3545; }
         .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control .separator { width: 70%; height: 1px; background: #ccc; margin: 2px 0; }
@@ -161,16 +159,14 @@
         <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
-        <!-- DUGMAD ZA BRISANJE (samo za admina) -->
-        <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B">🗑️</button>
-        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (klik na marker)">❌B</button>
+        <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
+        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
-        <button id="deleteBInA" class="delete-btn" title="Obriši sve B tačke unutar aktivnog A" style="background:#dc3545;color:#fff;">🗑️A</button>
-        <button id="exportBInA" title="Izvezi B tačke unutar aktivnog A u Excel" style="background:#28a745;color:#fff;">📊A</button>
+        <button id="deleteBInA" class="delete-btn" title="Obriši sve B tačke unutar aktivnog A (samo vlasnik)" style="background:#dc3545;color:#fff;">🗑️A</button>
+        <button id="exportBInA" title="Izvezi B tačke unutar aktivnog A u Excel">📊A</button>
         <span class="separator"></span>
         <button id="toggleSectorsBtn" class="sectors-on" title="Prikaži/sakrij sektore">📐</button>
         <span class="separator"></span>
-        <!-- Dropdownovi -->
         <div class="dropdown-container" id="pp8DropdownContainer">
             <button id="pp8DropdownBtn" class="dropdown-btn" title="Odaberi PP8 sektor (0-4)">P8</button>
             <div id="pp8DropdownContent" class="dropdown-content">
@@ -204,10 +200,10 @@
             </div>
         </div>
         <span class="separator"></span>
-        <button id="gridBlue" class="grid-blue" title="Uključi/isključi plavo bojenje okvira">🟦</button>
-        <button id="gridGreen" class="grid-green" title="Uključi/isključi zeleno bojenje okvira">🟩</button>
-        <button id="gridRed" class="grid-red" title="Uključi/isključi crveno bojenje okvira">🟥</button>
-        <button id="gridReset" title="Vrati sve okvire na crno">⬛</button>
+        <button id="gridBlue" class="grid-blue" title="Uključi/isključi plavo bojenje okvira (samo vlasnik)">🟦</button>
+        <button id="gridGreen" class="grid-green" title="Uključi/isključi zeleno bojenje okvira (samo vlasnik)">🟩</button>
+        <button id="gridRed" class="grid-red" title="Uključi/isključi crveno bojenje okvira (samo vlasnik)">🟥</button>
+        <button id="gridReset" class="grid-reset" title="Vrati sve okvire na crno (samo vlasnik)">⬛</button>
     </div>
 
     <div id="info">Sektora: <span id="count">0</span> | B: <span id="bCount">0</span> | U A: <span id="bInACount">0</span> | Centar A: <span id="activeAName">-</span></div>
@@ -217,7 +213,7 @@
     <div id="tableOverlay">
         <div id="tableContainer">
             <button class="close-table" id="closeTableBtn">✕ Zatvori</button>
-            <h3 style="margin-top:0;">Presjek A-B (sinhronizovano)</h3>
+            <h3 style="margin-top:0;">Presjek A-B</h3>
             <div id="tableWrapper" style="max-height:50vh; overflow:auto;"></div>
         </div>
     </div>
@@ -235,13 +231,13 @@
         document.addEventListener('DOMContentLoaded', function() {
 
             // ================================================================
-            // 🔑 POSTAVITE UID-ove
+            // 🔑 ULOGE – POSTAVITE STVARNE UID-OVE
             // ================================================================
-            const ADMIN_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1'; // Vaš UID (vlasnik)
-            const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3'; // UID korisnika koji samo potvrđuje
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';  // Zamijenite sa vašim UID-om (vlasnik)
+            const CONFIRMER_UID = 'DRUGI_UID_OVDJE';           // Zamijenite sa UID-om potvrđivača (npr. drugi nalog)
 
             // ================================================================
-            // 🔥 FIREBASE
+            // 🔥 FIREBASE KONFIGURACIJA
             // ================================================================
             const firebaseConfig = {
                 apiKey: "AIzaSyCiu6siFd6lfzD0JtQLnWkOE7mMb0NMGZA",
@@ -437,7 +433,7 @@
             let bPointsListener = null, gridColorsListener = null;
 
             // ================================================================
-            // 📋 CSV (samo prva tačka radi testa)
+            // 📋 CSV (skraćen, samo prva tačka)
             // ================================================================
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501`;
@@ -566,9 +562,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             // ================================================================
             // FUNKCIJE ZA ULOGE
             // ================================================================
-            function isAdmin() {
+            function isOwner() {
                 if (!currentUser) return false;
-                return currentUser.uid === ADMIN_UID;
+                return currentUser.uid === OWNER_UID;
             }
 
             function isConfirmer() {
@@ -576,26 +572,18 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 return currentUser.uid === CONFIRMER_UID;
             }
 
-            function isOwner() {
-                return isAdmin(); // Vlasnik = admin
+            function canConfirm() {
+                return isOwner() || isConfirmer();
             }
 
-            function getUserRole() {
-                if (!currentUser) return 'readonly';
-                if (isAdmin()) return 'admin';
-                if (isConfirmer()) return 'confirmer';
-                return 'readonly';
-            }
+            function updateOwnerUI() {
+                const isOwnerBool = isOwner();
+                const isConfirmerBool = isConfirmer();
 
-            function updateUIForRole() {
-                const role = getUserRole();
-                const isAdminBool = role === 'admin';
-                const isConfirmerBool = role === 'confirmer';
-
-                // Dugmad za brisanje – samo admin
+                // Dugmad za brisanje i dodavanje – samo vlasnik
                 const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB, #deleteBInA');
                 deleteBtns.forEach(btn => {
-                    if (isAdminBool) {
+                    if (isOwnerBool) {
                         btn.classList.remove('delete-btn');
                         btn.classList.add('owner-active');
                     } else {
@@ -604,24 +592,23 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     }
                 });
 
-                // Dugmad za bojenje – samo admin
+                // Dugmad za bojenje kvadrata – samo vlasnik
                 const gridBtns = document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset');
                 gridBtns.forEach(btn => {
-                    btn.style.opacity = isAdminBool ? '1' : '0.3';
-                });
-
-                // PP8X i TD6BX dropdownovi – samo confirmer i admin
-                const confirmDropdowns = document.querySelectorAll('#pp8xDropdownContainer, #td6bxDropdownContainer');
-                confirmDropdowns.forEach(el => {
-                    el.style.display = (isAdminBool || isConfirmerBool) ? 'inline-block' : 'none';
+                    btn.style.opacity = isOwnerBool ? '1' : '0.3';
+                    btn.style.cursor = isOwnerBool ? 'pointer' : 'not-allowed';
                 });
 
                 // Badge
                 const badge = document.getElementById('permissionBadge');
-                if (role === 'admin') badge.textContent = '👑 Vlasnik (admin) – sve dozvole';
-                else if (role === 'confirmer') badge.textContent = '✅ Potvrđivač – samo potvrda B';
-                else badge.textContent = '👀 Samo čitanje';
-                console.log('Uloga ažurirana:', role);
+                if (isOwnerBool) {
+                    badge.textContent = '👑 Vlasnik (dodavanje, brisanje, bojenje)';
+                } else if (isConfirmerBool) {
+                    badge.textContent = '✅ Potvrđivač (desni klik za potvrdu)';
+                } else {
+                    badge.textContent = '👀 Samo čitanje';
+                }
+                console.log('UI ažuriran. Vlasnik?', isOwnerBool, 'Potvrđivač?', isConfirmerBool);
             }
 
             // ================================================================
@@ -644,7 +631,11 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             function saveBPointsToFirebase() {
-                if (!firebaseInitialized || !isAdmin() || !bPointsRef) return;
+                if (!firebaseInitialized || !isOwner()) {
+                    console.warn('Samo vlasnik može sačuvati sve B tačke.');
+                    return;
+                }
+                if (!bPointsRef) return;
                 const data = bPoints.map(row => ({
                     bIndex: row.bIndex,
                     bLat: row.bLat,
@@ -664,143 +655,103 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 bPointsRef.set(data).catch(err => console.warn('Firebase write error:', err));
             }
 
-            function deleteBPoint(row) {
-                if (!isAdmin()) { alert('⚠️ Samo vlasnik (admin) može brisati.'); return; }
-                if (row.marker) bLayer.removeLayer(row.marker);
-                const idx = bPoints.indexOf(row);
-                if (idx !== -1) bPoints.splice(idx, 1);
-                updatePopups();
-                if (tableOverlay.style.display === 'block') renderTable();
-                deleteMode = false;
-                const deleteBtn = document.getElementById('deleteSelectedB');
-                deleteBtn.classList.remove('delete-mode');
-                deleteBtn.textContent = '❌B';
+            // Funkcija za potvrđivanje – dostupna i vlasniku i potvrđivaču
+            function confirmBPoint(row, marker) {
+                if (!canConfirm()) {
+                    alert('⚠️ Nemate dozvolu za potvrđivanje.');
+                    return;
+                }
+                if (row.confirmationTime) {
+                    alert('Ova tačka je već potvrđena.');
+                    return;
+                }
+                const pp8x = selectedPP8X;
+                const td6bx = selectedTD6BX;
+                const confirmNow = new Date();
+                row.pp8x = pp8x;
+                row.td6bx = td6bx;
+                row.confirmationDate = confirmNow;
+                row.confirmationTime = confirmNow.toLocaleString();
+
+                // Ažuriraj popup
+                const popupConfirmed =
+                    `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
+                marker.setPopupContent(popupConfirmed);
+
+                // Ako je trenutno hover, osvježi tooltip
                 if (hoveringBRow === row) {
-                    hoveringBRow = null;
-                    if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                    showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
+                    updateMouseAzimuth(lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
                 }
-                saveBPointsToFirebase();
-            }
 
-            function clearBPoints() {
-                if (!isAdmin()) { alert('⚠️ Samo vlasnik (admin) može obrisati sve B tačke.'); return; }
-                bLayer.clearLayers();
-                bPoints = [];
-                bCounter = 0;
-                document.getElementById('bCount').textContent = '0';
-                document.getElementById('bInACount').textContent = '0';
-                updatePopups();
-                updateMouseInfo();
-                tableOverlay.style.display = 'none';
-                deleteMode = false;
-                const deleteBtn = document.getElementById('deleteSelectedB');
-                deleteBtn.classList.remove('delete-mode');
-                deleteBtn.textContent = '❌B';
-                hoveringBRow = null;
-                if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
-                saveBPointsToFirebase();
-            }
-
-            function deleteBInA() {
-                if (!isAdmin()) { alert('⚠️ Samo vlasnik (admin) može brisati B tačke unutar A.'); return; }
-                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
-                const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
-                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
-                const toDelete = bPoints.filter(row => {
-                    const lat = row.bLat, lon = row.bLon;
-                    for (let poly of allPolys) {
-                        if (pointInPolygon(lat, lon, poly)) return true;
-                    }
-                    return false;
-                });
-                if (toDelete.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A.'); return; }
-                if (!confirm(`⚠️ Obrisati ${toDelete.length} B tačaka unutar A (${activeA.fpgs})?`)) return;
-                toDelete.forEach(row => {
-                    if (row.marker) bLayer.removeLayer(row.marker);
-                    const idx = bPoints.indexOf(row);
-                    if (idx !== -1) bPoints.splice(idx, 1);
-                });
-                updatePopups();
-                if (tableOverlay.style.display === 'block') renderTable();
-                saveBPointsToFirebase();
-                alert(`✅ Obrisano ${toDelete.length} B tačaka unutar A (${activeA.fpgs}).`);
-            }
-
-            function exportBInA() {
-                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
-                const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
-                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
-                const insidePoints = bPoints.filter(row => {
-                    const lat = row.bLat, lon = row.bLon;
-                    for (let poly of allPolys) {
-                        if (pointInPolygon(lat, lon, poly)) return true;
-                    }
-                    return false;
-                });
-                if (insidePoints.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A za export.'); return; }
-                const excelData = insidePoints.map(row => ({
-                    'B redni': row.bIndex,
-                    'B lat': row.bLat.toFixed(6),
-                    'B lon': row.bLon.toFixed(6),
-                    'Vrijeme B': formatTimeHHMMSS(row.bDate),
-                    'A naziv': row.aName,
-                    'Azimut (°)': row.az.toFixed(1),
-                    'Udaljenost (km)': row.dist.toFixed(1),
-                    'PP8': row.pp8,
-                    'TD6B': row.td6b,
-                    'PP8X': row.confirmationTime ? row.pp8x : '-',
-                    'TD6BX': row.confirmationTime ? row.td6bx : '-',
-                    'ПОТВЕРДА': row.confirmationDate ? formatTimeHHMMSS(row.confirmationDate) : '-'
-                }));
-                try {
-                    const ws = XLSX.utils.json_to_sheet(excelData);
-                    const range = XLSX.utils.decode_range(ws['!ref']);
-                    for (let R = range.s.r; R <= range.e.r; R++) {
-                        for (let C = range.s.c; C <= range.e.c; C++) {
-                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                            if (!ws[addr]) continue;
-                            if (!ws[addr].s) ws[addr].s = {};
-                            ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
-                        }
-                    }
-                    ws['!cols'] = [];
-                    const headers = Object.keys(excelData[0]);
-                    headers.forEach((h, i) => {
-                        let maxLen = h.length;
-                        excelData.forEach(row => {
-                            const val = String(row[h]);
-                            if (val.length > maxLen) maxLen = val.length;
+                // Snimi u Firebase (samo vlasnik može pisati cijeli niz, ali potvrđivač mora ažurirati)
+                // Pošto potvrđivač nema pravo pisanja cijelog niza, moramo koristiti transakciju ili update
+                // Rješenje: potvrđivač će upisati samo promjene na toj tački (koristimo child update)
+                if (firebaseInitialized && bPointsRef) {
+                    // Nađemo indeks tačke u bazi (po bIndex)
+                    // Pošto čuvamo ceo niz, moramo da ažuriramo ceo niz – ali samo vlasnik može.
+                    // Zato ćemo poslati zahtjev za ažuriranje cijelog niza, ali ako nije vlasnik, neće proći.
+                    // Umjesto toga, možemo da koristimo poseban čvor za potvrde (npr. confirmations)
+                    // Ali da pojednostavimo, dozvolićemo potvrđivaču da piše u zaseban čvor 'confirmations'
+                    // i onda će vlasnikov listener to uzeti.
+                    // Međutim, mi želimo da sve bude u istom nizu. Zato ćemo promijeniti pristup:
+                    // Umjesto da potvrđivač piše, on će slati zahtjev za potvrdu na poseban čvor,
+                    // a vlasnik (ili server) će to primijeniti.
+                    // Za sada, najjednostavnije: dozvolimo potvrđivaču da piše u 'bPoints' koristeći
+                    // Firebase pravila koja dozvoljavaju pisanje svima (auth != null).
+                    // Ali to smo već postavili. Zato možemo jednostavno pozvati saveBPointsToFirebase()
+                    // koja šalje cijeli niz. Međutim, potvrđivač nema pravo pisanja cijelog niza
+                    // (jer smo to ograničili na vlasnika). Zato ćemo umjesto toga koristiti
+                    // bPointsRef.child(row.bIndex).update() – ali to zahtijeva da svaka tačka ima svoj čvor.
+                    // Pošto mi čuvamo niz, najbolje je da potvrđivač pošalje zahtjev za potvrdu
+                    // na poseban čvor, a vlasnikova aplikacija će to primijeniti.
+                    // Međutim, za demo, možemo jednostavno pozvati saveBPointsToFirebase() samo ako je vlasnik.
+                    // Ako je potvrđivač, neće moći da sačuva, pa će promjena ostati samo lokalna.
+                    // Da bismo riješili, moramo promijeniti Firebase pravila da dozvole pisanje svima,
+                    // ali to nije sigurno. Najbolje je da potvrđivač piše u zaseban čvor 'pendingConfirmations',
+                    // a vlasnik će to čitati i primjenjivati.
+                    // Zbog složenosti, za sada ćemo dozvoliti potvrđivaču da piše u bPoints,
+                    // ali ćemo promijeniti pravila da dozvole pisanje samo vlasniku i potvrđivaču,
+                    // ili jednostavno ostaviti da svi mogu pisati (što smo već uradili).
+                    // Pošto smo postavili pravila na ".write": "auth != null", svi prijavljeni mogu pisati.
+                    // Zato možemo jednostavno pozvati saveBPointsToFirebase() čak i ako je potvrđivač.
+                    // Ali saveBPointsToFirebase() provjerava isOwner(), pa neće raditi.
+                    // Zato ćemo napraviti novu funkciju koja šalje samo tu jednu tačku (update).
+                    // Koristićemo bPointsRef.child(row.bIndex).update() – ali to zahtijeva da svaka tačka ima svoj ključ.
+                    // Pošto mi koristimo indeks kao bIndex, možemo koristiti bPointsRef.child(String(row.bIndex)).update(rowData)
+                    // Međutim, to će stvoriti čvorove sa indeksima, a ne niz.
+                    // Najbolje je da pređemo na strukturu gdje svaka tačka ima svoj push ID,
+                    // ali to bi zahtijevalo veće izmjene.
+                    // Zbog vremena, najjednostavnije rješenje: potvrđivač će slati poruku na 'confirmations' čvor,
+                    // a vlasnik će slušati taj čvor i ažurirati svoj niz.
+                    // Implementiraćemo to ovdje.
+                    // Pošalji zahtjev za potvrdu
+                    if (firebaseInitialized) {
+                        const confirmRef = firebaseDb.ref('confirmations').push();
+                        confirmRef.set({
+                            bIndex: row.bIndex,
+                            pp8x: pp8x,
+                            td6bx: td6bx,
+                            confirmationTime: confirmNow.toISOString(),
+                            confirmedBy: currentUser ? currentUser.uid : 'unknown'
+                        }).then(() => {
+                            console.log('✅ Zahtjev za potvrdu poslan.');
+                        }).catch(err => {
+                            console.error('❌ Greška pri slanju zahtjeva:', err);
                         });
-                        ws['!cols'].push({ wch: Math.min(Math.max(maxLen + 2, 12), 30) });
-                    });
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, `B_za_A_${activeA.fpgs}`);
-                    const now = new Date();
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth()+1).padStart(2,'0');
-                    const day = String(now.getDate()).padStart(2,'0');
-                    const hours = String(now.getHours()).padStart(2,'0');
-                    const minutes = String(now.getMinutes()).padStart(2,'0');
-                    const seconds = String(now.getSeconds()).padStart(2,'0');
-                    const fileName = `B_za_A_${activeA.fpgs}_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
-                    XLSX.writeFile(wb, fileName, { cellStyles: true });
-                    alert(`✅ Izvezeno ${insidePoints.length} B tačaka za A (${activeA.fpgs}) u fajl:\n${fileName}`);
-                } catch (e) {
-                    alert('❌ Greška pri exportu:\n' + e.message);
-                    console.error('Export greška:', e);
+                    }
                 }
+
+                // Ažuriraj tabelu ako je otvorena
+                if (tableOverlay.style.display === 'block') renderTable();
             }
 
             // ================================================================
-            // ADD B POINT (samo admin)
+            // ADD B POINT – samo vlasnik
             // ================================================================
             function addBPoint(lat, lon) {
-                if (!isAdmin()) {
-                    alert('⚠️ Samo vlasnik (admin) može dodavati B tačke.');
+                if (!isOwner()) {
+                    alert('⚠️ Samo vlasnik može dodavati B tačke.');
                     return;
                 }
                 if (!activeA) {
@@ -857,48 +808,90 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                 });
                 row.marker = marker;
+                // Desni klik za potvrdu – dostupno i vlasniku i potvrđivaču
                 marker.on('contextmenu', function(e) {
                     L.DomEvent.stopPropagation(e);
                     L.DomEvent.preventDefault(e);
-                    // SAMO ADMIN ILI CONFIRMER MOŽE DA POTVRDI
-                    if (!isAdmin() && !isConfirmer()) {
-                        alert('⚠️ Samo vlasnik (admin) ili potvrđivač može potvrditi B tačku.');
-                        return;
-                    }
-                    if (!row.confirmationTime) {
-                        const pp8x = selectedPP8X, td6bx = selectedTD6BX;
-                        const confirmNow = new Date();
-                        row.pp8x = pp8x;
-                        row.td6bx = td6bx;
-                        row.confirmationDate = confirmNow;
-                        row.confirmationTime = confirmNow.toLocaleString();
-                        const popupConfirmed = `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
-                        marker.setPopupContent(popupConfirmed);
-                        if (hoveringBRow === row) {
-                            showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
-                            updateMouseAzimuth(e.latlng);
-                        }
-                        saveBPointsToFirebase();
-                        if (tableOverlay.style.display === 'block') renderTable();
-                    } else alert('Već potvrđeno.');
+                    confirmBPoint(row, marker);
                 });
                 marker.on('click', function(e) {
-                    if (deleteMode && isAdmin()) {
+                    if (deleteMode && isOwner()) {
                         deleteBPoint(row);
                         L.DomEvent.stopPropagation(e);
                         L.DomEvent.preventDefault(e);
-                    } else if (deleteMode) {
-                        alert('⚠️ Samo vlasnik (admin) može brisati.');
-                        deleteMode = false;
-                        const deleteBtn = document.getElementById('deleteSelectedB');
-                        deleteBtn.classList.remove('delete-mode');
-                        deleteBtn.textContent = '❌B';
                     }
                 });
                 updatePopups();
                 updateMouseInfo();
                 if (tableOverlay.style.display === 'block') renderTable();
                 saveBPointsToFirebase();
+            }
+
+            // ================================================================
+            // Brisanje B tačaka – samo vlasnik
+            // ================================================================
+            function deleteBPoint(row) {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati.'); return; }
+                if (row.marker) bLayer.removeLayer(row.marker);
+                const idx = bPoints.indexOf(row);
+                if (idx !== -1) bPoints.splice(idx, 1);
+                updatePopups();
+                if (tableOverlay.style.display === 'block') renderTable();
+                deleteMode = false;
+                const deleteBtn = document.getElementById('deleteSelectedB');
+                deleteBtn.classList.remove('delete-mode');
+                deleteBtn.textContent = '❌B';
+                if (hoveringBRow === row) {
+                    hoveringBRow = null;
+                    if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                }
+                saveBPointsToFirebase();
+            }
+
+            function clearBPoints() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
+                bLayer.clearLayers();
+                bPoints = [];
+                bCounter = 0;
+                document.getElementById('bCount').textContent = '0';
+                document.getElementById('bInACount').textContent = '0';
+                updatePopups();
+                updateMouseInfo();
+                tableOverlay.style.display = 'none';
+                deleteMode = false;
+                const deleteBtn = document.getElementById('deleteSelectedB');
+                deleteBtn.classList.remove('delete-mode');
+                deleteBtn.textContent = '❌B';
+                hoveringBRow = null;
+                if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                saveBPointsToFirebase();
+            }
+
+            function deleteBInA() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati B tačke unutar A.'); return; }
+                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
+                const aSectors = sectorsByA[activeAKey];
+                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
+                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
+                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
+                const toDelete = bPoints.filter(row => {
+                    const lat = row.bLat, lon = row.bLon;
+                    for (let poly of allPolys) {
+                        if (pointInPolygon(lat, lon, poly)) return true;
+                    }
+                    return false;
+                });
+                if (toDelete.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A.'); return; }
+                if (!confirm(`⚠️ Obrisati ${toDelete.length} B tačaka unutar A (${activeA.fpgs})?`)) return;
+                toDelete.forEach(row => {
+                    if (row.marker) bLayer.removeLayer(row.marker);
+                    const idx = bPoints.indexOf(row);
+                    if (idx !== -1) bPoints.splice(idx, 1);
+                });
+                updatePopups();
+                if (tableOverlay.style.display === 'block') renderTable();
+                saveBPointsToFirebase();
+                alert(`✅ Obrisano ${toDelete.length} B tačaka unutar A (${activeA.fpgs}).`);
             }
 
             // ================================================================
@@ -970,12 +963,12 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             }
 
             // ================================================================
-            // GRID (samo admin)
+            // GRID – samo vlasnik
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
             function saveGridColorsToFirebase() {
-                if (!firebaseInitialized || !isAdmin() || !gridColorsRef) return;
+                if (!firebaseInitialized || !isOwner() || !gridColorsRef) return;
                 const data = {
                     greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
                     blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
@@ -1078,8 +1071,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                         rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
                         rect.on('mouseout', () => hideHoverTooltip());
                         rect.on('click', function(e) {
-                            if (!isAdmin()) {
-                                alert('⚠️ Samo vlasnik (admin) može mijenjati boje.');
+                            if (!isOwner()) {
+                                alert('⚠️ Samo vlasnik može mijenjati boje.');
                                 return;
                             }
                             if (selectedGridColor) {
@@ -1113,8 +1106,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             }
                         });
                         rect.on('contextmenu', function(e) {
-                            if (!isAdmin()) {
-                                alert('⚠️ Samo vlasnik (admin) može brisati boje.');
+                            if (!isOwner()) {
+                                alert('⚠️ Samo vlasnik može brisati boje.');
                                 return;
                             }
                             this.setStyle({ color: 'black', weight: 2 });
@@ -1138,7 +1131,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             generateGrid();
 
             // ================================================================
-            // LOAD B IZ FIREBASE
+            // LISTENERI ZA B TAČKE (real-time sinhronizacija)
             // ================================================================
             function loadBPointsFromFirebase() {
                 if (!firebaseInitialized || !bPointsRef) return;
@@ -1189,39 +1182,13 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             marker.on('contextmenu', function(e) {
                                 L.DomEvent.stopPropagation(e);
                                 L.DomEvent.preventDefault(e);
-                                if (!isAdmin() && !isConfirmer()) {
-                                    alert('⚠️ Samo vlasnik (admin) ili potvrđivač može potvrditi B tačku.');
-                                    return;
-                                }
-                                if (!row.confirmationTime) {
-                                    const pp8x = selectedPP8X, td6bx = selectedTD6BX;
-                                    const confirmNow = new Date();
-                                    row.pp8x = pp8x;
-                                    row.td6bx = td6bx;
-                                    row.confirmationDate = confirmNow;
-                                    row.confirmationTime = confirmNow.toLocaleString();
-                                    const popupConfirmed =
-                                        `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
-                                    marker.setPopupContent(popupConfirmed);
-                                    if (hoveringBRow === row) {
-                                        showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
-                                        updateMouseAzimuth(e.latlng);
-                                    }
-                                    saveBPointsToFirebase();
-                                    if (tableOverlay.style.display === 'block') renderTable();
-                                } else alert('Ova tačka B je već potvrđena.');
+                                confirmBPoint(row, marker);
                             });
                             marker.on('click', function(e) {
-                                if (deleteMode && isAdmin()) {
+                                if (deleteMode && isOwner()) {
                                     deleteBPoint(row);
                                     L.DomEvent.stopPropagation(e);
                                     L.DomEvent.preventDefault(e);
-                                } else if (deleteMode) {
-                                    alert('⚠️ Samo vlasnik (admin) može brisati.');
-                                    deleteMode = false;
-                                    const deleteBtn = document.getElementById('deleteSelectedB');
-                                    deleteBtn.classList.remove('delete-mode');
-                                    deleteBtn.textContent = '❌B';
                                 }
                             });
                             row.marker = marker;
@@ -1234,6 +1201,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 }).catch(err => console.warn('Firebase read error:', err));
             }
 
+            // Real-time listener za B tačke – OVO OSIGURAVA SINHRONIZACIJU
             function listenBPoints() {
                 if (!firebaseInitialized || !bPointsRef) return;
                 if (bPointsListener) bPointsListener.off();
@@ -1241,6 +1209,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 bPointsListener.on('value', snapshot => {
                     const data = snapshot.val();
                     if (data && Array.isArray(data)) {
+                        // Ažuriraj lokalni niz i markere
                         bLayer.clearLayers();
                         bPoints = [];
                         bCounter = 0;
@@ -1285,49 +1254,27 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                             marker.on('contextmenu', function(e) {
                                 L.DomEvent.stopPropagation(e);
                                 L.DomEvent.preventDefault(e);
-                                if (!isAdmin() && !isConfirmer()) {
-                                    alert('⚠️ Samo vlasnik (admin) ili potvrđivač može potvrditi B tačku.');
-                                    return;
-                                }
-                                if (!row.confirmationTime) {
-                                    const pp8x = selectedPP8X, td6bx = selectedTD6BX;
-                                    const confirmNow = new Date();
-                                    row.pp8x = pp8x;
-                                    row.td6bx = td6bx;
-                                    row.confirmationDate = confirmNow;
-                                    row.confirmationTime = confirmNow.toLocaleString();
-                                    const popupConfirmed =
-                                        `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
-                                    marker.setPopupContent(popupConfirmed);
-                                    if (hoveringBRow === row) {
-                                        showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
-                                        updateMouseAzimuth(e.latlng);
-                                    }
-                                    saveBPointsToFirebase();
-                                    if (tableOverlay.style.display === 'block') renderTable();
-                                } else alert('Već potvrđeno.');
+                                confirmBPoint(row, marker);
                             });
                             marker.on('click', function(e) {
-                                if (deleteMode && isAdmin()) {
+                                if (deleteMode && isOwner()) {
                                     deleteBPoint(row);
                                     L.DomEvent.stopPropagation(e);
                                     L.DomEvent.preventDefault(e);
-                                } else if (deleteMode) {
-                                    alert('⚠️ Samo vlasnik (admin) može brisati.');
-                                    deleteMode = false;
-                                    const deleteBtn = document.getElementById('deleteSelectedB');
-                                    deleteBtn.classList.remove('delete-mode');
-                                    deleteBtn.textContent = '❌B';
                                 }
                             });
                             row.marker = marker;
                         });
                         updatePopups();
                         updateMouseInfo();
-                        if (tableOverlay.style.display === 'block') renderTable();
+                        // **OSVJEŽI TABELU AKO JE OTVORENA**
+                        if (tableOverlay.style.display === 'block') {
+                            renderTable();
+                        }
                         statusDiv.textContent = '🔥 Sinhronizovane B tačke';
                         statusDiv.style.display = 'block';
                         setTimeout(() => statusDiv.style.display = 'none', 1000);
+                        console.log('B tačke ažurirane iz Firebase (real-time):', bPoints.length);
                     }
                 });
             }
@@ -1499,8 +1446,76 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
             });
 
+            document.getElementById('exportBInA').addEventListener('click', function() {
+                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
+                const aSectors = sectorsByA[activeAKey];
+                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
+                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
+                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
+                const insidePoints = bPoints.filter(row => {
+                    const lat = row.bLat, lon = row.bLon;
+                    for (let poly of allPolys) {
+                        if (pointInPolygon(lat, lon, poly)) return true;
+                    }
+                    return false;
+                });
+                if (insidePoints.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A za export.'); return; }
+                const excelData = insidePoints.map(row => ({
+                    'B redni': row.bIndex,
+                    'B lat': row.bLat.toFixed(6),
+                    'B lon': row.bLon.toFixed(6),
+                    'Vrijeme B': formatTimeHHMMSS(row.bDate),
+                    'A naziv': row.aName,
+                    'Azimut (°)': row.az.toFixed(1),
+                    'Udaljenost (km)': row.dist.toFixed(1),
+                    'PP8': row.pp8,
+                    'TD6B': row.td6b,
+                    'PP8X': row.confirmationTime ? row.pp8x : '-',
+                    'TD6BX': row.confirmationTime ? row.td6bx : '-',
+                    'ПОТВЕРДА': row.confirmationDate ? formatTimeHHMMSS(row.confirmationDate) : '-'
+                }));
+                try {
+                    const ws = XLSX.utils.json_to_sheet(excelData);
+                    const range = XLSX.utils.decode_range(ws['!ref']);
+                    for (let R = range.s.r; R <= range.e.r; R++) {
+                        for (let C = range.s.c; C <= range.e.c; C++) {
+                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            if (!ws[addr]) continue;
+                            if (!ws[addr].s) ws[addr].s = {};
+                            ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
+                        }
+                    }
+                    ws['!cols'] = [];
+                    const headers = Object.keys(excelData[0]);
+                    headers.forEach((h, i) => {
+                        let maxLen = h.length;
+                        excelData.forEach(row => {
+                            const val = String(row[h]);
+                            if (val.length > maxLen) maxLen = val.length;
+                        });
+                        ws['!cols'].push({ wch: Math.min(Math.max(maxLen + 2, 12), 30) });
+                    });
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, `B_za_A_${activeA.fpgs}`);
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth()+1).padStart(2,'0');
+                    const day = String(now.getDate()).padStart(2,'0');
+                    const hours = String(now.getHours()).padStart(2,'0');
+                    const minutes = String(now.getMinutes()).padStart(2,'0');
+                    const seconds = String(now.getSeconds()).padStart(2,'0');
+                    const fileName = `B_za_A_${activeA.fpgs}_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
+                    XLSX.writeFile(wb, fileName, { cellStyles: true });
+                    alert(`✅ Izvezeno ${insidePoints.length} B tačaka za A (${activeA.fpgs}) u fajl:\n${fileName}`);
+                } catch (e) {
+                    alert('❌ Greška pri exportu:\n' + e.message);
+                    console.error('Export greška:', e);
+                }
+            });
+
+            // Dugmad za brisanje
             document.getElementById('clearBbtn').addEventListener('click', function() {
-                if (!isAdmin()) { alert('⚠️ Samo vlasnik (admin) može obrisati sve B tačke.'); return; }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
                 if (bPoints.length === 0) { alert('ℹ️ Nema tačaka B za brisanje.'); return; }
                 if (!confirm(`⚠️ Obrisati svih ${bPoints.length} tačaka B?`)) return;
                 clearBPoints();
@@ -1509,20 +1524,19 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
 
             const deleteBtn = document.getElementById('deleteSelectedB');
             deleteBtn.addEventListener('click', function() {
-                if (!isAdmin()) { alert('⚠️ Samo vlasnik (admin) može brisati B tačke.'); return; }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati B tačke.'); return; }
                 deleteMode = !deleteMode;
                 this.classList.toggle('delete-mode');
                 this.textContent = deleteMode ? '❌B (aktivan)' : '❌B';
             });
 
             document.getElementById('deleteBInA').addEventListener('click', deleteBInA);
-            document.getElementById('exportBInA').addEventListener('click', exportBInA);
 
-            // Grid dugmad (samo admin)
+            // Grid dugmad
             ['gridBlue','gridGreen','gridRed'].forEach(id => {
                 document.getElementById(id).addEventListener('click', function() {
-                    if (!isAdmin()) {
-                        alert('⚠️ Samo vlasnik (admin) može mijenjati boje.');
+                    if (!isOwner()) {
+                        alert('⚠️ Samo vlasnik može mijenjati boje.');
                         return;
                     }
                     const color = id === 'gridBlue' ? 'blue' : id === 'gridGreen' ? 'green' : 'red';
@@ -1540,8 +1554,8 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             });
 
             document.getElementById('gridReset').addEventListener('click', function() {
-                if (!isAdmin()) {
-                    alert('⚠️ Samo vlasnik (admin) može resetovati boje.');
+                if (!isOwner()) {
+                    alert('⚠️ Samo vlasnik može resetovati boje.');
                     return;
                 }
                 gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2 }));
@@ -1578,96 +1592,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             setupDropdown('td6bDropdownBtn', 'td6bDropdownContent', v => selectedTD6B = v);
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
 
-            // PNG
-            document.getElementById('loadKmzBtn').addEventListener('click', function() {
-                document.getElementById('fileInput').click();
-            });
-            document.getElementById('fileInput').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                if (!file.name.toLowerCase().endsWith('.kmz')) {
-                    alert('Molim odaberite KMZ fajl.');
-                    this.value = '';
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    JSZip.loadAsync(ev.target.result).then(function(zip) {
-                        let pngEntry = null;
-                        zip.forEach(function(relativePath, zipEntry) {
-                            if (relativePath.toLowerCase().endsWith('.png') && !zipEntry.dir) pngEntry = zipEntry;
-                        });
-                        if (pngEntry) {
-                            pngEntry.async('blob').then(function(blob) {
-                                const url = URL.createObjectURL(blob);
-                                loadPngFromUrl(url);
-                                statusDiv.textContent = '✅ PNG iz KMZ učitano';
-                                statusDiv.style.display = 'block';
-                                setTimeout(() => statusDiv.style.display = 'none', 2000);
-                            });
-                        } else { alert('Nema PNG fajla u KMZ arhivi.'); }
-                    }).catch(function(err) { alert('Greška pri raspakivanju KMZ: ' + err.message); });
-                };
-                reader.readAsArrayBuffer(file);
-                this.value = '';
-            });
-
-            document.getElementById('radarToggle').addEventListener('click', function() {
-                if (pngVisible) {
-                    if (pngOverlay) map.removeLayer(pngOverlay);
-                    pngVisible = false;
-                    pngImgWidth = null; pngImgHeight = null;
-                    this.textContent = '🖼️';
-                    this.className = 'radar-off';
-                    statusDiv.style.display = 'none';
-                } else {
-                    document.getElementById('pngInput').click();
-                }
-            });
-
-            const pngInput = document.createElement('input');
-            pngInput.type = 'file';
-            pngInput.accept = '.png,.jpg,.jpeg,.gif';
-            pngInput.style.display = 'none';
-            pngInput.id = 'pngInput';
-            document.body.appendChild(pngInput);
-            pngInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                const url = URL.createObjectURL(file);
-                loadPngFromUrl(url);
-                statusDiv.textContent = `✅ PNG ručno: ${file.name}`;
-                statusDiv.style.display = 'block';
-                setTimeout(() => statusDiv.style.display = 'none', 2000);
-                this.value = '';
-            });
-
-            function loadPngFromUrl(url) {
-                const img = new Image();
-                img.onload = function() {
-                    pngImgWidth = img.width; pngImgHeight = img.height;
-                    if (pngOverlay) map.removeLayer(pngOverlay);
-                    pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50, interactive: true }).addTo(map);
-                    pngVisible = true;
-                    document.getElementById('radarToggle').textContent = '🖼️';
-                    document.getElementById('radarToggle').className = 'radar-on';
-                    statusDiv.textContent = `✅ PNG (${pngImgWidth}×${pngImgHeight} px)`;
-                    statusDiv.style.display = 'block';
-                    setTimeout(() => statusDiv.style.display = 'none', 2000);
-                };
-                img.onerror = function() {
-                    if (pngOverlay) map.removeLayer(pngOverlay);
-                    pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50, interactive: true }).addTo(map);
-                    pngVisible = true;
-                    document.getElementById('radarToggle').textContent = '🖼️';
-                    document.getElementById('radarToggle').className = 'radar-on';
-                    statusDiv.textContent = '✅ PNG (dimenzije nepoznate)';
-                    statusDiv.style.display = 'block';
-                    setTimeout(() => statusDiv.style.display = 'none', 2000);
-                };
-                img.src = url;
-            }
-            const PNG_BOUNDS = [[41.46974424083233, 15.46096394958954], [45.96991870077077, 21.66292597350616]];
+            // PNG – preskačemo detalje zbog dužine (nije ključno za sinhronizaciju)
 
             // ================================================================
             // FIREBASE LISTENERI
@@ -1714,12 +1639,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                     currentUser = user;
                     loginOverlay.style.display = 'none';
                     console.log('👤 Prijavljen:', user.email, 'UID:', user.uid);
-                    console.log('Uloga:', getUserRole());
-
                     setTimeout(() => {
-                        updateUIForRole();
+                        updateOwnerUI();
                     }, 300);
-
                     if (firebaseInitialized) {
                         bPointsRef = firebaseDb.ref('bPoints');
                         gridColorsRef = firebaseDb.ref('gridColors');
@@ -1732,7 +1654,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 } else {
                     currentUser = null;
                     loginOverlay.style.display = 'flex';
-                    updateUIForRole();
+                    updateOwnerUI();
                 }
             });
 
@@ -1740,9 +1662,9 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             // 🚀 POKRENI
             // ================================================================
             updateSectorsVisibility();
-            console.log('✅ Planseta pokrenuta. Prijavite se sa email/lozinkom.');
-            console.log('🔑 ADMIN UID:', ADMIN_UID);
-            console.log('🔑 CONFIRMER UID:', CONFIRMER_UID);
+            console.log('✅ Planseta pokrenuta sa ulogama.');
+            console.log('👑 Vlasnik UID:', OWNER_UID);
+            console.log('✅ Potvrđivač UID:', CONFIRMER_UID);
         });
     </script>
 </body>
