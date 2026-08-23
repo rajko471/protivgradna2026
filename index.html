@@ -45,6 +45,8 @@
         .custom-control button.delete-mode { background: #ff9800; color: #fff; border-color: #ff9800; }
         .custom-control button.map-on { background: #007bff; color: #fff; border-color: #007bff; }
         .custom-control button.map-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.a-on { background: #28a745; color: #fff; border-color: #28a745; }
+        .custom-control button.a-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
         .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
@@ -152,6 +154,8 @@
         <button class="active" data-filter="all">S</button>
         <span class="separator"></span>
         <button id="toggleMapBtn" class="map-on" title="Prikaži/sakrij mapu">🗺️</button>
+        <span class="separator"></span>
+        <button id="toggleABtn" class="a-on" title="Prikaži/sakrij sve A tačke">A</button>
         <span class="separator"></span>
         <button id="radarToggle" class="radar-off">🖼️</button>
         <span class="separator"></span>
@@ -1368,6 +1372,23 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
                 updateSectorsVisibility();
                 updatePopups();
                 if (firebaseInitialized && activeARef) activeARef.set(null);
+            });
+
+            // Dugme za prikaz/sakrivanje svih A tačaka
+            const toggleABtn = document.getElementById('toggleABtn');
+            let aVisible = true;
+            toggleABtn.addEventListener('click', function() {
+                if (aVisible) {
+                    map.removeLayer(markerLayer);
+                    aVisible = false;
+                    this.className = 'a-off';
+                    this.title = 'Prikaži sve A tačke';
+                } else {
+                    map.addLayer(markerLayer);
+                    aVisible = true;
+                    this.className = 'a-on';
+                    this.title = 'Sakrij sve A tačke';
+                }
             });
 
             document.getElementById('showTableBtn').addEventListener('click', function() {
