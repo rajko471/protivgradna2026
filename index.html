@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -47,8 +48,6 @@
         .custom-control button.map-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.a-on { background: #28a745; color: #fff; border-color: #28a745; }
         .custom-control button.a-off { background: #6c757d; color: #fff; border-color: #6c757d; }
-        .custom-control button.border-on { background: #28a745; color: #fff; border-color: #28a745; }
-        .custom-control button.border-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
         .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
@@ -153,14 +152,12 @@
     <div id="hoverTooltip"></div>
 
     <div class="custom-control" id="customControl">
-        <button class="active" data-filter="all">S</button>
-        <span class="separator"></span>
+        <!-- Dugme S je uklonjeno -->
         <button id="toggleMapBtn" class="map-on" title="Prikaži/sakrij mapu">🗺️</button>
         <span class="separator"></span>
         <button id="toggleABtn" class="a-on" title="Prikaži/sakrij sve A tačke">A</button>
         <span class="separator"></span>
-        <button id="toggleBorderBtn" class="border-off" title="Prikaži/sakrij državne i entitetske granice">🌍</button>
-        <span class="separator"></span>
+        <!-- Dugme za granice je uklonjeno -->
         <button id="radarToggle" class="radar-off">🖼️</button>
         <span class="separator"></span>
         <button id="loadKmzBtn" title="Učitaj KMZ (PNG)">📁</button>
@@ -175,8 +172,7 @@
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
         <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
-        <button id="deleteBInA" class="delete-btn" title="Obriši sve B tačke unutar aktivnog A (samo vlasnik)" style="background:#dc3545;color:#fff;">🗑️A</button>
-        <button id="exportBInA" title="Izvezi B tačke unutar aktivnog A u Excel">📊A</button>
+        <!-- Dugmad za brisanje i export unutar A su uklonjena -->
         <span class="separator"></span>
         <button id="toggleSectorsBtn" class="sectors-on" title="Prikaži/sakrij sektore">📐</button>
         <span class="separator"></span>
@@ -292,30 +288,6 @@
             document.getElementById('toggleMapBtn').addEventListener('click', function() {
                 if (mapVisible) { map.removeLayer(tileLayer); mapVisible = false; this.className = 'map-off'; this.title = 'Prikaži mapu'; }
                 else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; this.title = 'Sakrij mapu'; }
-            });
-
-            // ================================================================
-            // 🌍 SLOJ ZA GRANICE (državne i entitetske)
-            // ================================================================
-            const borderLayer = L.tileLayer('https://tile.openstreetmap.bzh/ca/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 18,
-                opacity: 0.8
-            });
-            let bordersVisible = false;
-
-            document.getElementById('toggleBorderBtn').addEventListener('click', function() {
-                if (bordersVisible) {
-                    map.removeLayer(borderLayer);
-                    bordersVisible = false;
-                    this.className = 'border-off';
-                    this.title = 'Prikaži državne i entitetske granice';
-                } else {
-                    borderLayer.addTo(map);
-                    bordersVisible = true;
-                    this.className = 'border-on';
-                    this.title = 'Sakrij državne i entitetske granice';
-                }
             });
 
             const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
@@ -975,7 +947,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 const isGridEditorBool = isGridEditor();
 
                 // Dugmad za brisanje i dodavanje – samo vlasnik
-                const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB, #deleteBInA');
+                const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB');
                 deleteBtns.forEach(btn => {
                     if (isOwnerBool) {
                         btn.classList.remove('delete-btn');
@@ -1080,16 +1052,10 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     updateMouseAzimuth(lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
                 }
 
-                // Snimi u Firebase – samo vlasnik može pisati cijeli niz,
-                // ali potvrđivač mora ažurirati. Zato ćemo koristiti transakciju:
-                // Pošto smo dozvolili pisanje svima, možemo jednostavno pozvati
-                // saveBPointsToFirebase() samo ako je vlasnik, a ako je potvrđivač,
-                // šaljemo zahtjev na 'confirmations' čvor.
                 if (firebaseInitialized && bPointsRef) {
                     if (isOwner()) {
                         saveBPointsToFirebase();
                     } else {
-                        // Potvrđivač šalje zahtjev
                         const confirmRef = firebaseDb.ref('confirmations').push();
                         confirmRef.set({
                             bIndex: row.bIndex,
@@ -1228,32 +1194,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 saveBPointsToFirebase();
             }
 
-            function deleteBInA() {
-                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati B tačke unutar A.'); return; }
-                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
-                const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
-                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
-                const toDelete = bPoints.filter(row => {
-                    const lat = row.bLat, lon = row.bLon;
-                    for (let poly of allPolys) {
-                        if (pointInPolygon(lat, lon, poly)) return true;
-                    }
-                    return false;
-                });
-                if (toDelete.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A.'); return; }
-                if (!confirm(`⚠️ Obrisati ${toDelete.length} B tačaka unutar A (${activeA.fpgs})?`)) return;
-                toDelete.forEach(row => {
-                    if (row.marker) bLayer.removeLayer(row.marker);
-                    const idx = bPoints.indexOf(row);
-                    if (idx !== -1) bPoints.splice(idx, 1);
-                });
-                updatePopups();
-                if (tableOverlay.style.display === 'block') renderTable();
-                saveBPointsToFirebase();
-                alert(`✅ Obrisano ${toDelete.length} B tačaka unutar A (${activeA.fpgs}).`);
-            }
+            // Funkcije deleteBInA i exportBInA su uklonjene
 
             // ================================================================
             // B VISIBILITY, SECTORS
@@ -1316,9 +1257,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     if (s.type === 'pp8') pp8Layer.addLayer(s.polygon);
                     else if (s.type === 'pp6') pp6Layer.addLayer(s.polygon);
                 });
-                document.querySelectorAll('#customControl button[data-filter]').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.filter === 'all' && !filterByA);
-                });
+                // Dugme S je uklonjeno, pa ne ažuriramo njegovo stanje
                 document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
                 updateBVisibility();
             }
@@ -1721,14 +1660,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             // ================================================================
             // EVENTI DUGMADI
             // ================================================================
-            document.querySelector('#customControl button[data-filter="all"]').addEventListener('click', function() {
-                filterByA = false;
-                if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
-                document.getElementById('activeAName').textContent = '-';
-                updateSectorsVisibility();
-                updatePopups();
-                if (firebaseInitialized && activeARef) activeARef.set(null);
-            });
+            // Dugme S je uklonjeno, pa nema njegovog event listenera
 
             document.getElementById('toggleSectorsBtn').addEventListener('click', function() {
                 sectorsVisible = !sectorsVisible;
@@ -1820,73 +1752,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
             });
 
-            document.getElementById('exportBInA').addEventListener('click', function() {
-                if (!activeA) { alert('⚠️ Prvo izaberite A marker.'); return; }
-                const aSectors = sectorsByA[activeAKey];
-                if (!aSectors) { alert('⚠️ Nema sektora za ovaj A.'); return; }
-                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
-                if (allPolys.length === 0) { alert('⚠️ Ovaj A nema sektore.'); return; }
-                const insidePoints = bPoints.filter(row => {
-                    const lat = row.bLat, lon = row.bLon;
-                    for (let poly of allPolys) {
-                        if (pointInPolygon(lat, lon, poly)) return true;
-                    }
-                    return false;
-                });
-                if (insidePoints.length === 0) { alert('ℹ️ Nema B tačaka unutar aktivnog A za export.'); return; }
-                const excelData = insidePoints.map(row => ({
-                    'B redni': row.bIndex,
-                    'B lat': row.bLat.toFixed(6),
-                    'B lon': row.bLon.toFixed(6),
-                    'Vrijeme B': formatTimeHHMMSS(row.bDate),
-                    'A naziv': row.aName,
-                    'Azimut (°)': row.az.toFixed(1),
-                    'Udaljenost (km)': row.dist.toFixed(1),
-                    'PP8': row.pp8,
-                    'TD6B': row.td6b,
-                    'PP8X': row.confirmationTime ? row.pp8x : '-',
-                    'TD6BX': row.confirmationTime ? row.td6bx : '-',
-                    'ПОТВЕРДА': row.confirmationDate ? formatTimeHHMMSS(row.confirmationDate) : '-'
-                }));
-                try {
-                    const ws = XLSX.utils.json_to_sheet(excelData);
-                    const range = XLSX.utils.decode_range(ws['!ref']);
-                    for (let R = range.s.r; R <= range.e.r; R++) {
-                        for (let C = range.s.c; C <= range.e.c; C++) {
-                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                            if (!ws[addr]) continue;
-                            if (!ws[addr].s) ws[addr].s = {};
-                            ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
-                        }
-                    }
-                    ws['!cols'] = [];
-                    const headers = Object.keys(excelData[0]);
-                    headers.forEach((h, i) => {
-                        let maxLen = h.length;
-                        excelData.forEach(row => {
-                            const val = String(row[h]);
-                            if (val.length > maxLen) maxLen = val.length;
-                        });
-                        ws['!cols'].push({ wch: Math.min(Math.max(maxLen + 2, 12), 30) });
-                    });
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, `B_za_A_${activeA.fpgs}`);
-                    const now = new Date();
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth()+1).padStart(2,'0');
-                    const day = String(now.getDate()).padStart(2,'0');
-                    const hours = String(now.getHours()).padStart(2,'0');
-                    const minutes = String(now.getMinutes()).padStart(2,'0');
-                    const seconds = String(now.getSeconds()).padStart(2,'0');
-                    const fileName = `B_za_A_${activeA.fpgs}_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
-                    XLSX.writeFile(wb, fileName, { cellStyles: true });
-                    alert(`✅ Izvezeno ${insidePoints.length} B tačaka za A (${activeA.fpgs}) u fajl:\n${fileName}`);
-                } catch (e) {
-                    alert('❌ Greška pri exportu:\n' + e.message);
-                    console.error('Export greška:', e);
-                }
-            });
-
             // Dugmad za brisanje
             document.getElementById('clearBbtn').addEventListener('click', function() {
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
@@ -1903,8 +1768,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 this.classList.toggle('delete-mode');
                 this.textContent = deleteMode ? '❌B (aktivan)' : '❌B';
             });
-
-            document.getElementById('deleteBInA').addEventListener('click', deleteBInA);
 
             // Grid dugmad – sada koriste canEditGrid()
             ['gridBlue','gridGreen','gridRed'].forEach(id => {
@@ -2001,7 +1864,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         imageFile.async('blob').then(function(blob) {
                             const url = URL.createObjectURL(blob);
 
-                            // Funkcija za dodavanje overlay-a sa zadatim granicama
                             function addOverlay(bounds) {
                                 if (pngOverlay) {
                                     map.removeLayer(pngOverlay);
@@ -2013,7 +1875,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                                 fileInput.value = '';
                             }
 
-                            // Ako postoji KML, pokušaj izvući granice
                             if (kmlFile) {
                                 kmlFile.async('text').then(function(kmlText) {
                                     try {
@@ -2030,7 +1891,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                                                 return;
                                             }
                                         }
-                                        // fallback: koristi trenutni centar mape
                                         const center = map.getCenter();
                                         const half = 0.05;
                                         addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
@@ -2047,7 +1907,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                                     addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
                                 });
                             } else {
-                                // Nema KML, koristi trenutni centar
                                 const center = map.getCenter();
                                 const half = 0.05;
                                 addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
