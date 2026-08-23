@@ -240,9 +240,9 @@
             // ================================================================
             // 🔑 ULOGE – POSTAVITE STVARNE UID-OVE
             // ================================================================
-            const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';      // Vlasnik (sve)
-            const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';               // Potvrđivač (samo potvrda)
-            const GRID_EDITOR_UID = 'vaodsCFsqLZTd3tGLxMIYyGcucZ2';             // Urednik kvadrata (samo bojenje)
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';      // Vlasnik (sve)
+            const CONFIRMER_UID = 'DRUGI_UID_OVDJE';               // Potvrđivač (samo potvrda)
+            const GRID_EDITOR_UID = 'TRECI_UID_OVDJE';             // Urednik kvadrata (samo bojenje)
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -1572,6 +1572,123 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
             setupDropdown('pp8xDropdownBtn', 'pp8xDropdownContent', v => selectedPP8X = v);
             setupDropdown('td6bDropdownBtn', 'td6bDropdownContent', v => selectedTD6B = v);
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
+
+            // ================================================================
+            // 📁 UCITAJ KMZ – potpuna implementacija
+            // ================================================================
+            const loadKmzBtn = document.getElementById('loadKmzBtn');
+            const fileInput = document.getElementById('fileInput');
+
+            loadKmzBtn.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const arrayBuffer = event.target.result;
+                    JSZip.loadAsync(arrayBuffer).then(function(zip) {
+                        let imageFile = null;
+                        let kmlFile = null;
+                        zip.forEach(function(relativePath, zipEntry) {
+                            if (zipEntry.name.match(/\.(png|jpg|jpeg)$/i)) {
+                                imageFile = zipEntry;
+                            } else if (zipEntry.name.match(/\.kml$/i)) {
+                                kmlFile = zipEntry;
+                            }
+                        });
+                        if (!imageFile) {
+                            alert('Nije pronađena slika u KMZ fajlu.');
+                            fileInput.value = '';
+                            return;
+                        }
+                        imageFile.async('blob').then(function(blob) {
+                            const url = URL.createObjectURL(blob);
+
+                            // Funkcija za dodavanje overlay-a sa zadatim granicama
+                            function addOverlay(bounds) {
+                                if (pngOverlay) {
+                                    map.removeLayer(pngOverlay);
+                                }
+                                pngOverlay = L.imageOverlay(url, bounds, { opacity: 0.7 }).addTo(map);
+                                pngVisible = true;
+                                document.getElementById('radarToggle').className = 'radar-on';
+                                document.getElementById('radarToggle').textContent = '🖼️ ON';
+                                fileInput.value = '';
+                            }
+
+                            // Ako postoji KML, pokušaj izvući granice
+                            if (kmlFile) {
+                                kmlFile.async('text').then(function(kmlText) {
+                                    try {
+                                        const parser = new DOMParser();
+                                        const xml = parser.parseFromString(kmlText, 'text/xml');
+                                        const latLonBox = xml.querySelector('LatLonBox');
+                                        if (latLonBox) {
+                                            const north = parseFloat(latLonBox.querySelector('north').textContent);
+                                            const south = parseFloat(latLonBox.querySelector('south').textContent);
+                                            const east = parseFloat(latLonBox.querySelector('east').textContent);
+                                            const west = parseFloat(latLonBox.querySelector('west').textContent);
+                                            if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
+                                                addOverlay([[south, west], [north, east]]);
+                                                return;
+                                            }
+                                        }
+                                        // fallback: koristi trenutni centar mape
+                                        const center = map.getCenter();
+                                        const half = 0.05;
+                                        addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
+                                    } catch (err) {
+                                        console.warn('Greška pri parsiranju KML:', err);
+                                        const center = map.getCenter();
+                                        const half = 0.05;
+                                        addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
+                                    }
+                                }).catch(function(err) {
+                                    console.warn('Greška pri čitanju KML:', err);
+                                    const center = map.getCenter();
+                                    const half = 0.05;
+                                    addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
+                                });
+                            } else {
+                                // Nema KML, koristi trenutni centar
+                                const center = map.getCenter();
+                                const half = 0.05;
+                                addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
+                            }
+                        }).catch(function(err) {
+                            alert('Greška pri čitanju slike: ' + err.message);
+                            fileInput.value = '';
+                        });
+                    }).catch(function(err) {
+                        alert('Greška pri otvaranju KMZ fajla: ' + err.message);
+                        fileInput.value = '';
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // ================================================================
+            // 👁️ Radar toggle (prikaz/sakrivanje PNG overlay-a)
+            // ================================================================
+            document.getElementById('radarToggle').addEventListener('click', function() {
+                if (pngOverlay) {
+                    if (map.hasLayer(pngOverlay)) {
+                        map.removeLayer(pngOverlay);
+                        this.className = 'radar-off';
+                        this.textContent = '🖼️';
+                    } else {
+                        map.addLayer(pngOverlay);
+                        this.className = 'radar-on';
+                        this.textContent = '🖼️ ON';
+                    }
+                } else {
+                    alert('Prvo učitajte KMZ fajl.');
+                }
+            });
 
             // ================================================================
             // FIREBASE LISTENERI
