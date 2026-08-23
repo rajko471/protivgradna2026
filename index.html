@@ -47,6 +47,8 @@
         .custom-control button.map-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.a-on { background: #28a745; color: #fff; border-color: #28a745; }
         .custom-control button.a-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.border-on { background: #28a745; color: #fff; border-color: #28a745; }
+        .custom-control button.border-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
         .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
@@ -156,6 +158,8 @@
         <button id="toggleMapBtn" class="map-on" title="Prikaži/sakrij mapu">🗺️</button>
         <span class="separator"></span>
         <button id="toggleABtn" class="a-on" title="Prikaži/sakrij sve A tačke">A</button>
+        <span class="separator"></span>
+        <button id="toggleBorderBtn" class="border-off" title="Prikaži/sakrij državne i entitetske granice">🌍</button>
         <span class="separator"></span>
         <button id="radarToggle" class="radar-off">🖼️</button>
         <span class="separator"></span>
@@ -288,6 +292,30 @@
             document.getElementById('toggleMapBtn').addEventListener('click', function() {
                 if (mapVisible) { map.removeLayer(tileLayer); mapVisible = false; this.className = 'map-off'; this.title = 'Prikaži mapu'; }
                 else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; this.title = 'Sakrij mapu'; }
+            });
+
+            // ================================================================
+            // 🌍 SLOJ ZA GRANICE (državne i entitetske)
+            // ================================================================
+            const borderLayer = L.tileLayer('https://tile.openstreetmap.bzh/ca/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 18,
+                opacity: 0.8
+            });
+            let bordersVisible = false;
+
+            document.getElementById('toggleBorderBtn').addEventListener('click', function() {
+                if (bordersVisible) {
+                    map.removeLayer(borderLayer);
+                    bordersVisible = false;
+                    this.className = 'border-off';
+                    this.title = 'Prikaži državne i entitetske granice';
+                } else {
+                    borderLayer.addTo(map);
+                    bordersVisible = true;
+                    this.className = 'border-on';
+                    this.title = 'Sakrij državne i entitetske granice';
+                }
             });
 
             const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
@@ -794,7 +822,6 @@ VU01,45.020760,18.256628,42000,1,1,39,76,119,131,174,311,342,15,30,76,119,143,17
 PE01,44.857723,18.538517,42000,1,132,192,204,219,271,309,,,132,192,204,219,,,,,4,8,2.25,4.5,90510
 PE02,44.884701,18.573551,42000,1,38,64,176,191,,,,,38,64,176,191,,,,,4,8,2.25,4.5,90510
 PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8,2.25,4.5,90510`;
-
             // ================================================================
             // 🗺️ A MARKERI I SEKTORI
             // ================================================================
