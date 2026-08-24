@@ -1575,7 +1575,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // TABELA
+            // TABELA A-B
             // ================================================================
             function buildTableData() {
                 return bPoints.map(row => ({
@@ -1614,7 +1614,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // DUGME ZA POTVRDE – loadConfirmations()
+            // DUGME ZA POTVRDE – loadConfirmations() (ispravljeno)
             // ================================================================
             function loadConfirmations() {
                 if (!firebaseInitialized) {
@@ -1633,13 +1633,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         alert('ℹ️ Nema potvrda.');
                         return;
                     }
-                    // Sortiraj od najnovije
                     confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
 
                     let html = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;">';
                     html += '<div style="background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);">';
                     html += '<h3 style="margin-top:0;">📋 Potvrde (sve)</h3>';
-                    html += '<button onclick="this.parentElement.parentElement.parentElement.remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
+                    html += '<button onclick="this.closest(\'div[style*=\'position:fixed\']\').remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
                     html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
                     html += '<thead><tr><th>B redni</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
                     confirmations.forEach(c => {
@@ -1649,13 +1648,16 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     });
                     html += '</tbody></table>';
                     html += '</div></div>';
-                    // Dodaj na body
-                    const overlay = document.createElement('div');
-                    overlay.innerHTML = html;
-                    document.body.appendChild(overlay.firstElementChild);
-                    // Zatvaranje klikom na pozadinu
-                    overlay.firstElementChild.addEventListener('click', function(e) {
-                        if (e.target === this) this.remove();
+
+                    const modalContainer = document.createElement('div');
+                    modalContainer.innerHTML = html;
+                    const modalElement = modalContainer.firstElementChild;
+                    document.body.appendChild(modalElement);
+
+                    modalElement.addEventListener('click', function(e) {
+                        if (e.target === this) {
+                            this.remove();
+                        }
                     });
                 }).catch(err => alert('❌ Greška pri učitavanju potvrda:\n' + err.message));
             }
