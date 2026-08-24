@@ -2,7 +2,7 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – 3 uloge (auto‑load KMZ)</title>
+    <title>Planseta – 3 uloge (auto‑load KMZ, potvrde)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
@@ -167,6 +167,7 @@
         <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
+        <button id="showConfirmationsBtn" title="Prikaži potvrde (vlasnik)">✅ Potvrde</button>
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
         <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
@@ -1059,13 +1060,15 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     if (isOwner()) {
                         saveBPointsToFirebase();
                     } else {
+                        // Potvrđivač šalje zahtjev – čuvamo i email
                         const confirmRef = firebaseDb.ref('confirmations').push();
                         confirmRef.set({
                             bIndex: row.bIndex,
                             pp8x: pp8x,
                             td6bx: td6bx,
                             confirmationTime: confirmNow.toISOString(),
-                            confirmedBy: currentUser ? currentUser.uid : 'unknown'
+                            confirmedBy: currentUser ? currentUser.uid : 'unknown',
+                            confirmedByEmail: currentUser ? currentUser.email : 'unknown'
                         }).then(() => {
                             console.log('✅ Zahtjev za potvrdu poslan.');
                         }).catch(err => {
@@ -1094,7 +1097,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     return;
                 }
                 const dist = haversine(activeA.lat, activeA.lon, lat, lon);
-                // ⬇️ OGRANIČENJE 8 km (umjesto 10)
                 if (dist > 8) {
                     alert('Udaljenost od aktivnog A je veća od 8 km. Nije dozvoljeno.');
                     return;
@@ -1158,7 +1160,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 saveBPointsToFirebase();
             }
 
-            // Brisanje B tačaka (isto kao prije)
             function deleteBPoint(row) {
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati.'); return; }
                 if (row.marker) bLayer.removeLayer(row.marker);
@@ -1262,7 +1263,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // GRID – vlasnik ili urednik kvadrata
+            // GRID
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
@@ -1613,6 +1614,53 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
+            // DUGME ZA POTVRDE – loadConfirmations()
+            // ================================================================
+            function loadConfirmations() {
+                if (!firebaseInitialized) {
+                    alert('🔥 Firebase nije inicijalizovan.');
+                    return;
+                }
+                const confirmRef = firebaseDb.ref('confirmations');
+                confirmRef.once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (!data) {
+                        alert('ℹ️ Nema potvrda u bazi.');
+                        return;
+                    }
+                    const confirmations = Object.values(data);
+                    if (confirmations.length === 0) {
+                        alert('ℹ️ Nema potvrda.');
+                        return;
+                    }
+                    // Sortiraj od najnovije
+                    confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
+
+                    let html = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;">';
+                    html += '<div style="background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);">';
+                    html += '<h3 style="margin-top:0;">📋 Potvrde (sve)</h3>';
+                    html += '<button onclick="this.parentElement.parentElement.parentElement.remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+                    html += '<thead><tr><th>B redni</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
+                    confirmations.forEach(c => {
+                        const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
+                        const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
+                        html += `<tr><td>${c.bIndex}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
+                    });
+                    html += '</tbody></table>';
+                    html += '</div></div>';
+                    // Dodaj na body
+                    const overlay = document.createElement('div');
+                    overlay.innerHTML = html;
+                    document.body.appendChild(overlay.firstElementChild);
+                    // Zatvaranje klikom na pozadinu
+                    overlay.firstElementChild.addEventListener('click', function(e) {
+                        if (e.target === this) this.remove();
+                    });
+                }).catch(err => alert('❌ Greška pri učitavanju potvrda:\n' + err.message));
+            }
+
+            // ================================================================
             // TOOLTIP I AZIMUT
             // ================================================================
             function showHoverTooltip(text, latlng) {
@@ -1759,6 +1807,11 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     XLSX.writeFile(wb, fileName);
                     alert('✅ Excel fajl uspješno sačuvan:\n' + fileName);
                 } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
+            });
+
+            // DUGME ZA POTVRDE
+            document.getElementById('showConfirmationsBtn').addEventListener('click', function() {
+                loadConfirmations();
             });
 
             document.getElementById('clearBbtn').addEventListener('click', function() {
@@ -1930,7 +1983,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             });
 
             // ================================================================
-            // 👁️ Radar toggle (prikaz/sakrivanje PNG overlay-a)
+            // 👁️ Radar toggle
             // ================================================================
             document.getElementById('radarToggle').addEventListener('click', function() {
                 if (pngOverlay) {
