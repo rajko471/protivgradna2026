@@ -2,7 +2,7 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – 3 uloge</title>
+    <title>Planseta – 3 uloge (auto‑load KMZ)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
@@ -54,11 +54,9 @@
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control .separator { width: 70%; height: 1px; background: #ccc; margin: 2px 0; }
         .custom-control input[type="file"] { display: none; }
-        /* Dugmad za brisanje - samo vlasnik */
         .delete-btn { opacity: 0.5; cursor: not-allowed; }
         .delete-btn.owner-active { opacity: 1; cursor: pointer; }
         .delete-btn.owner-active:hover { background: #f0f0f0; }
-        /* Dugmad za kvadrate - vlasnik ili urednik kvadrata */
         .grid-btn { opacity: 0.5; cursor: not-allowed; }
         .grid-btn.grid-active { opacity: 1; cursor: pointer; }
         .grid-btn.grid-active:hover { background: #f0f0f0; }
@@ -241,9 +239,9 @@
             // ================================================================
             // 🔑 ULOGE – POSTAVITE STVARNE UID-OVE
             // ================================================================
-            const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
-            const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';
-            const GRID_EDITOR_UID = 'vaodsCFsqLZTd3tGLxMIYyGcucZ2';
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';
+            const CONFIRMER_UID = 'DRUGI_UID_OVDJE';
+            const GRID_EDITOR_UID = 'TRECI_UID_OVDJE';
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -441,7 +439,7 @@
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
 
-            // ---- NOVE VARIJABLE ZA SERVER ----
+            // ---- SERVER METADATA ----
             let currentKmzName = null;
             let currentKmzModified = null;
             let currentKmzSize = null;
@@ -451,7 +449,7 @@
             ];
 
             // ================================================================
-            // 📋 CSV (skraćen, samo prva tačka)
+            // 📋 KOMPLETAN CSV
             // ================================================================
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501
@@ -800,8 +798,7 @@ VU01,45.020760,18.256628,42000,1,1,39,76,119,131,174,311,342,15,30,76,119,143,17
 PE01,44.857723,18.538517,42000,1,132,192,204,219,271,309,,,132,192,204,219,,,,,4,8,2.25,4.5,90510
 PE02,44.884701,18.573551,42000,1,38,64,176,191,,,,,38,64,176,191,,,,,4,8,2.25,4.5,90510
 PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8,2.25,4.5,90510`;
-            // ================================================================
-            // 🗺️ A MARKERI I SEKTORI
+
             // ================================================================
             // 🗺️ A MARKERI I SEKTORI
             // ================================================================
@@ -924,19 +921,22 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             });
 
             // ================================================================
-            // FUNKCIJE ZA ULOGE
+            // FUNKCIJE ZA ULOGE – SA BYPASS ZA LOCALHOST
             // ================================================================
             function isOwner() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === OWNER_UID;
             }
 
             function isConfirmer() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === CONFIRMER_UID;
             }
 
             function isGridEditor() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === GRID_EDITOR_UID;
             }
@@ -990,7 +990,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // FUNKCIJE ZA B TAČKE (samo vlasnik može dodavati/brisati)
+            // FUNKCIJE ZA B TAČKE (samo vlasnik)
             // ================================================================
             function isPointInsideColoredCell(lat, lon) {
                 for (let c of greenCells) {
@@ -1078,7 +1078,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // ADD B POINT – samo vlasnik
+            // ADD B POINT – OGRANIČENJE 8 km
             // ================================================================
             function addBPoint(lat, lon) {
                 if (!isOwner()) {
@@ -1094,8 +1094,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     return;
                 }
                 const dist = haversine(activeA.lat, activeA.lon, lat, lon);
-                if (dist > 10) {
-                    alert('Udaljenost od aktivnog A je veća od 10 km. Nije dozvoljeno.');
+                // ⬇️ OGRANIČENJE 8 km (umjesto 10)
+                if (dist > 8) {
+                    alert('Udaljenost od aktivnog A je veća od 8 km. Nije dozvoljeno.');
                     return;
                 }
                 if (isPointInActiveASectors(lat, lon)) {
@@ -1157,9 +1158,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 saveBPointsToFirebase();
             }
 
-            // ================================================================
-            // Brisanje B tačaka – samo vlasnik
-            // ================================================================
+            // Brisanje B tačaka (isto kao prije)
             function deleteBPoint(row) {
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati.'); return; }
                 if (row.marker) bLayer.removeLayer(row.marker);
@@ -1431,7 +1430,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             generateGrid();
 
             // ================================================================
-            // LISTENERI ZA B TAČKE (real-time sinhronizacija)
+            // LISTENERI ZA B TAČKE (Firebase)
             // ================================================================
             function loadBPointsFromFirebase() {
                 if (!firebaseInitialized || !bPointsRef) return;
@@ -1630,7 +1629,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
 
             function updateMouseAzimuth(latlng) {
                 let html = '';
-                // Prikaz metadata sa servera
                 if (currentKmzName) {
                     const dateStr = currentKmzModified ? new Date(currentKmzModified).toLocaleString() : '';
                     const sizeStr = currentKmzSize ? (currentKmzSize / 1024).toFixed(1) + ' KB' : '';
@@ -1810,7 +1808,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 saveGridColorsToFirebase();
             });
 
-            // Dropdown
             function setupDropdown(btnId, contentId, callback) {
                 const btn = document.getElementById(btnId);
                 const content = document.getElementById(contentId);
@@ -1839,7 +1836,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
 
             // ================================================================
-            // 📁 UCITAJ KMZ – ručno (putem fajl dijaloga)
+            // 📁 UCITAJ KMZ (ručno)
             // ================================================================
             const loadKmzBtn = document.getElementById('loadKmzBtn');
             const fileInput = document.getElementById('fileInput');
@@ -1954,8 +1951,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             // ================================================================
             // 🌐 KOMUNIKACIJA SA NODE SERVEROM (auto-load + WebSocket)
             // ================================================================
-
-            // ---- Učitaj najnoviji PNG sa servera ----
             async function loadFromServer(endpoint = '/api/latest-kmz-png') {
                 try {
                     const response = await fetch(endpoint);
@@ -1969,12 +1964,10 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         return false;
                     }
 
-                    // Sačuvaj metadata
                     currentKmzName = data.name;
                     currentKmzModified = data.modified;
                     currentKmzSize = data.size;
 
-                    // Dekodiraj base64 sliku
                     const byteCharacters = atob(data.data);
                     const byteNumbers = new Array(byteCharacters.length);
                     for (let i = 0; i < byteCharacters.length; i++) {
@@ -1984,7 +1977,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     const blob = new Blob([byteArray], { type: data.mimeType || 'image/png' });
                     const url = URL.createObjectURL(blob);
 
-                    // Učitaj sliku i prikaži je na mapi
                     const img = new Image();
                     img.onload = function() {
                         pngImgWidth = img.width;
@@ -2001,7 +1993,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                     };
                     img.onerror = function() {
-                        // Fallback – prikaži bez dimenzija
                         if (pngOverlay) map.removeLayer(pngOverlay);
                         pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50, interactive: true })
                             .addTo(map);
@@ -2022,13 +2013,11 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 }
             }
 
-            // ---- WebSocket konekcija ----
             function connectWebSocket() {
                 const ws = new WebSocket('ws://localhost:3000');
 
                 ws.onopen = function() {
                     console.log('✅ WebSocket povezan sa serverom.');
-                    // Pošalji zahtjev za najnovijim KMZ-om
                     ws.send(JSON.stringify({ type: 'getLatestKmz' }));
                 };
 
@@ -2058,7 +2047,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 return ws;
             }
 
-            // ---- Dugme za ručno osvježavanje ----
             const refreshBtn = document.getElementById('refreshBtn');
             refreshBtn.addEventListener('click', async function() {
                 this.disabled = true;
@@ -2068,7 +2056,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 this.disabled = false;
             });
 
-            // ---- Auto-load nakon inicijalizacije ----
             setTimeout(async () => {
                 await loadFromServer('/api/latest-kmz-png');
                 connectWebSocket();
@@ -2112,7 +2099,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // 🔐 AUTH STATE (Nakon prijave)
+            // 🔐 AUTH STATE
             // ================================================================
             auth.onAuthStateChanged(user => {
                 if (user) {
@@ -2147,6 +2134,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             console.log('✅ Potvrđivač UID:', CONFIRMER_UID);
             console.log('🎨 Urednik kvadrata UID:', GRID_EDITOR_UID);
             console.log('🌐 Server komunikacija aktivirana (auto-load KMZ/PNG).');
+            console.log('📏 Ograničenje udaljenosti B tačaka: 8 km.');
         });
     </script>
 </body>
