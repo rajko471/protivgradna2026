@@ -244,7 +244,7 @@
             // ================================================================
             const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
             const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';
-            const GRID_EDITOR_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';
+            const GRID_EDITOR_UID = 'vaodsCFsqLZTd3tGLxMIYyGcucZ2';
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -924,22 +924,19 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             });
 
             // ================================================================
-            // FUNKCIJE ZA ULOGE – SA BYPASS ZA LOCALHOST
+            // 🛡️ FUNKCIJE ZA ULOGE – BEZ LOCALHOST BYPASS
             // ================================================================
             function isOwner() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === OWNER_UID;
             }
 
             function isConfirmer() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === CONFIRMER_UID;
             }
 
             function isGridEditor() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === GRID_EDITOR_UID;
             }
