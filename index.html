@@ -1651,11 +1651,14 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     html += '<h3 style="margin-top:0;">📋 Potvrde (sve)</h3>';
                     html += '<button onclick="this.closest(\'div[style*=\'position:fixed\']\').remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
                     html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-                    html += '<thead><tr><th>B redni</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
+                    html += '<thead><tr><th>B redni</th><th>A naziv</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
                     confirmations.forEach(c => {
                         const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
                         const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
-                        html += `<tr><td>${c.bIndex}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
+                        // Pronađi A naziv iz bPoints
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        const aName = bPoint ? bPoint.aName : '-';
+                        html += `<tr><td>${c.bIndex}</td><td>${aName}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
                     });
                     html += '</tbody></table>';
                     html += '</div></div>';
