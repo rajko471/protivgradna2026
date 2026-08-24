@@ -60,6 +60,7 @@
         .grid-btn { opacity: 0.5; cursor: not-allowed; }
         .grid-btn.grid-active { opacity: 1; cursor: pointer; }
         .grid-btn.grid-active:hover { background: #f0f0f0; }
+        .owner-only { display: none; }
         .dropdown-container { position: relative; display: inline-block; overflow: visible; }
         .dropdown-content {
             display: none; position: absolute; top: 100%; left: 0; margin-top: 2px;
@@ -167,7 +168,8 @@
         <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
-        <button id="showConfirmationsBtn" title="Prikaži potvrde (vlasnik)">✅ Potvrde</button>
+        <!-- Dugme za potvrde – prikazuje se SAMO vlasniku (klasa owner-only) -->
+        <button id="showConfirmationsBtn" class="owner-only" title="Prikaži potvrde (samo vlasnik)">✅ Potvrde</button>
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
         <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
         <button id="clearABtn" title="Poništi izbor A">❌A</button>
@@ -240,9 +242,9 @@
             // ================================================================
             // 🔑 ULOGE – POSTAVITE STVARNE UID-OVE
             // ================================================================
-            const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
-            const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';
-            const GRID_EDITOR_UID = 'vaodsCFsqLZTd3tGLxMIYyGcucZ2';
+            const OWNER_UID = '1b5jdoJcX9bNIXr7K09Pn0oj9xQ2';
+            const CONFIRMER_UID = 'DRUGI_UID_OVDJE';
+            const GRID_EDITOR_UID = 'TRECI_UID_OVDJE';
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -955,6 +957,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 const isConfirmerBool = isConfirmer();
                 const isGridEditorBool = isGridEditor();
 
+                // Dugmad za brisanje – samo vlasnik
                 const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB');
                 deleteBtns.forEach(btn => {
                     if (isOwnerBool) {
@@ -966,6 +969,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     }
                 });
 
+                // Dugmad za kvadrate – vlasnik ili urednik
                 const gridBtns = document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset');
                 gridBtns.forEach(btn => {
                     if (isOwnerBool || isGridEditorBool) {
@@ -976,6 +980,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         btn.classList.add('grid-btn');
                     }
                 });
+
+                // Dugme za potvrde – SAMO vlasnik
+                const confirmBtn = document.getElementById('showConfirmationsBtn');
+                if (confirmBtn) {
+                    confirmBtn.style.display = isOwnerBool ? 'inline-block' : 'none';
+                }
 
                 const badge = document.getElementById('permissionBadge');
                 if (isOwnerBool) {
@@ -1614,9 +1624,13 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // DUGME ZA POTVRDE – loadConfirmations() (ispravljeno)
+            // DUGME ZA POTVRDE – loadConfirmations() (samo vlasnik)
             // ================================================================
             function loadConfirmations() {
+                if (!isOwner()) {
+                    alert('⚠️ Samo vlasnik može vidjeti potvrde.');
+                    return;
+                }
                 if (!firebaseInitialized) {
                     alert('🔥 Firebase nije inicijalizovan.');
                     return;
@@ -1811,7 +1825,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
             });
 
-            // DUGME ZA POTVRDE
+            // DUGME ZA POTVRDE – EVENT
             document.getElementById('showConfirmationsBtn').addEventListener('click', function() {
                 loadConfirmations();
             });
