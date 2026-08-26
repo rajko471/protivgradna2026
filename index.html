@@ -2,9 +2,10 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – 3 uloge (auto‑load KMZ, potvrde)</title>
+    <title>Planseta – 3 uloge (auto‑load KMZ, potvrde, rakete)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
+        /* ----- STILOVI (ISTI KAO RANIJE) ----- */
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
         #map { height:100%; width:100%; cursor: crosshair; }
         #loginOverlay {
@@ -168,7 +169,6 @@
         <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
         <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
         <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
-        <!-- Dugme za potvrde – prikazuje se SAMO vlasniku (klasa owner-only) -->
         <button id="showConfirmationsBtn" class="owner-only" title="Prikaži potvrde (samo vlasnik)">✅ Potvrde</button>
         <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
         <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
@@ -245,6 +245,358 @@
             const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
             const CONFIRMER_UID = 'Rx1pbnADseegDXG5iErpyP7Xr3F3';
             const GRID_EDITOR_UID = 'vaodsCFsqLZTd3tGLxMIYyGcucZ2';
+
+            // ================================================================
+            // 🚀 POČETNO STANJE RAKETA – OVDJE ZALIJEPI SVOJ CSV
+            // ================================================================
+            // CSV format: A naziv,PP8,TD6B
+            // Primjer:
+            // A naziv,PP8,TD6B
+            // NT,10,5
+            // 1,8,3
+            const ROCKET_CSV_DATA = `
+    A naziv,PP8,TD6B
+    NT,0,0
+1,6,0
+4,4,0
+13,6,0
+17,4,0
+19,4,0
+24,4,0
+36,6,0
+37,6,0
+39,4,0
+41,6,0
+95,0,0
+96,6,0
+97,4,0
+98,5,0
+99,6,0
+130,11,0
+131,11,0
+132,12,0
+133,11,0
+134,12,0
+135,12,0
+136,10,0
+137,10,0
+145,3,0
+146,5,0
+147,6,0
+148,8,0
+149,4,0
+150,7,0
+151,8,0
+152,8,0
+153,5,0
+154,5,0
+156,4,0
+159,6,0
+183,4,0
+184,4,0
+186,4,0
+187,4,0
+188,4,0
+189,4,0
+190,4,0
+191,4,0
+193,6,0
+196,5,0
+198,6,0
+199,6,0
+200,4,0
+202,5,0
+203,4,0
+205,6,0
+206,0,0
+207,5,0
+208,8,0
+209,6,0
+211,11,0
+212,12,0
+213,11,0
+214,12,0
+215,10,0
+216,11,0
+219,4,0
+221,4,0
+223,4,0
+229,6,0
+234,6,0
+235,6,0
+236,6,0
+237,6,0
+238,4,0
+239,3,0
+241,6,0
+242,4,0
+243,3,0
+244,6,0
+245,4,0
+246,6,0
+247,4,0
+248,4,0
+249,4,0
+270,11,0
+271,10,0
+272,10,0
+273,8,0
+274,12,0
+275,10,0
+276,10,0
+277,11,0
+278,8,0
+279,3,0
+280,9,0
+281,7,0
+282,9,0
+283,6,0
+284,8,0
+285,0,0
+286,10,0
+287,2,0
+288,6,0
+289,6,0
+290,5,0
+291,9,0
+292,6,0
+293,6,0
+100,4,0
+101,6,0
+102,6,0
+103,5,0
+104,6,0
+105,6,0
+106,7,0
+107,6,0
+108,4,0
+109,4,0
+110,6,0
+111,6,0
+112,5,0
+113,4,0
+114,4,0
+115,6,0
+116,4,0
+117,3,0
+118,6,0
+119,6,0
+120,6,0
+121,6,0
+122,6,0
+123,6,0
+177,4,0
+178,6,0
+179,6,0
+180,6,0
+182,4,0
+TR01,4,4
+TR02,3,3
+TR03,4,3
+TR04,4,3
+TR05,4,3
+TR06,2,2
+TR07,4,4
+TR08,3,5
+TR09,2,2
+TR10,4,4
+PD01,0,4
+PD02,4,1
+PD03,4,3
+PD04,0,4
+PD05,2,1
+PD06,4,1
+PD07,3,1
+PD08,3,3
+PD09,4,3
+PD10,4,3
+PD11,2,2
+PD12,4,1
+PD13,4,3
+PD14,0,5
+PD15,2,3
+NG01,4,3
+NG02,4,3
+NG03,4,0
+NG04,4,3
+NG05,2,3
+NG06,4,2
+NG07,4,1
+NG08,3,1
+NG09,4,3
+OL01,4,3
+OL02,2,1
+KD01,2,2
+KD02,0,5
+KD03,1,3
+KD04,4,1
+KD05,0,4
+KD06,2,3
+KD07,4,3
+KD08,2,3
+KD09,2,3
+KD10,4,0
+KO01,3,2
+KR01,2,3
+BL01,0,5
+BL02,4,1
+BL03,0,4
+BL04,0,6
+BL05,4,3
+BL06,3,1
+BL07,4,3
+BL08,0,4
+BL09,4,2
+BL10,2,3
+BL11,1,3
+BL12,4,1
+BL13,2,3
+BL14,4,0
+BL15,4,1
+BL16,0,4
+BL17,4,3
+PR01,2,1
+PR02,2,3
+PR03,2,3
+PR04,1,2
+PR05,4,3
+PR06,4,3
+PR07,0,5
+PR08,0,6
+PR09,4,1
+PR10,4,3
+PR11,4,4
+PR12,0,3
+PR13,3,3
+BI01,0,3
+BI02,4,0
+BI03,3,0
+BE01,1,5
+BE02,1,3
+GA01,0,6
+GA02,0,5
+GA03,2,3
+NV01,0,6
+NV02,0,6
+NV03,2,3
+NV04,1,3
+NV05,2,3
+LJ01,0,0
+LJ02,0,0
+LJ03,0,0
+SR01,4,1
+SR02,4,3
+SR03,4,2
+SR04,4,4
+SR05,4,3
+SR06,4,3
+SR07,4,3
+SR08,4,6
+SR09,4,3
+CE01,0,4
+CE02,2,6
+CE03,1,6
+CE04,0,4
+CE05,2,3
+CE06,0,5
+GD01,0,0
+GD02,3,2
+GD03,2,4
+GD04,4,3
+GD05,4,3
+GD06,4,3
+GD07,4,1
+GD08,4,3
+GD09,4,3
+GD10,4,3
+GD11,4,6
+GD12,2,3
+GD13,2,3
+GD14,4,3
+GD15,2,3
+GD17,4,3
+LA01,4,3
+LA02,4,1
+LA03,2,3
+LA04,2,3
+LA05,2,3
+LA06,2,3
+LA07,0,7
+LA08,2,4
+LA09,4,4
+LA10,2,5
+BR01,4,3
+BR02,2,3
+BR03,4,3
+BR04,4,3
+DE03,2,0
+DE04,3,1
+DE05,4,3
+DE06,4,3
+DE07,4,3
+DE08,4,3
+DE09,4,3
+DE10,2,3
+DE11,4,1
+KV01,4,6
+KV02,4,6
+KV03,0,4
+TE01,0,3
+TE03,4,2
+TE05,4,6
+TE06,4,3
+ST01,3,3
+ST02,2,2
+DO01,4,3
+DO03,4,1
+DO04,4,0
+DO06,4,3
+DO07,4,3
+SA02,4,3
+SA03,4,1
+SA05,4,1
+ZV01,2,7
+ZV07,0,9
+VL01,4,4
+VL02,1,9
+MI01,4,3
+MI02,0,7
+MI03,2,4
+SC01,1,9
+SC02,2,5
+SC03,4,3
+SC04,2,5
+SC05,1,6
+SC06,2,4
+BC05,4,3
+SE01,2,9
+SE02,0,4
+GO01,0,0
+CA01,1,5
+CA02,2,6
+VG01,0,9
+VG02,2,9
+VG03,4,7
+VG04,2,9
+VG05,2,9
+VG06,2,9
+RO03,0,9
+RO04,0,9
+HP01,2,8
+SO02,0,0
+RU01,3,9
+RU02,4,8
+RU03,4,6
+RU04,2,0
+MO01,4,1
+MO02,4,3
+MO03,2,2
+MO04,2,3
+MO05,4,3
+VU01,3,2
+PE01,4,3
+PE02,4,3
+PE03,4,3
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -442,6 +794,9 @@
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
 
+            // ---- RAKETNO STANJE ----
+            let rocketStock = {}; // { aName: { pp8: number, td6b: number } }
+
             // ---- SERVER METADATA ----
             let currentKmzName = null;
             let currentKmzModified = null;
@@ -560,6 +915,11 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
 291,44.502980,18.866087,42000,1,145,315,,,,,,,,,,,,,,,4,8,2.25,4.5,90709
 292,44.426319,18.871492,42000,1,285,95,,,,,,,,,,,,,,,4,8,2.25,4.5,90709
 293,44.464090,18.911295,42000,1,45,75,175,295,,,,,,,,,,,,,4,8,2.25,4.5,90709
+BOR,44.583271,17.606093,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+JAH,43.720148,18.561821,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+BNX,44.941845,17.297423,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+TZL,44.459273,18.722256,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+DBV,42.561441,18.263685,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
 100,44.772365,18.978431,42000,1,165,215,15,55,,,,,165,215,15,55,,,,,4,8,2.25,4.5,90516
 101,44.809494,19.005292,42000,1,295,45,,,,,,,295,45,,,,,,,4,8,2.25,4.5,90516
 102,44.827981,19.070394,42000,1,55,75,255,25,155,225,,,55,75,255,25,155,225,,,4,8,2.25,4.5,90516
@@ -798,7 +1158,109 @@ PE02,44.884701,18.573551,42000,1,38,64,176,191,,,,,38,64,176,191,,,,,4,8,2.25,4.
 PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8,2.25,4.5,90510`;
 
             // ================================================================
-            // 🗺️ A MARKERI I SEKTORI
+            // 🚀 PARSIRANJE POČETNOG STANJA RAKETA
+            // ================================================================
+            function parseRocketData() {
+                const lines = ROCKET_CSV_DATA.trim().split('\n');
+                if (lines.length < 2) {
+                    console.warn('⚠️ Nema podataka o raketama.');
+                    return;
+                }
+                // Prvi red je zaglavlje – preskačemo
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    const parts = line.split(',').map(s => s.trim());
+                    if (parts.length < 3) continue;
+                    const aName = parts[0];
+                    const pp8 = parseInt(parts[1]);
+                    const td6b = parseInt(parts[2]);
+                    if (isNaN(pp8) || isNaN(td6b)) {
+                        console.warn(`⚠️ Neispravan red u raketnom CSV-u: ${line}`);
+                        continue;
+                    }
+                    rocketStock[aName] = { pp8: pp8, td6b: td6b };
+                }
+                console.log('🚀 Početno stanje raketa učitano:', rocketStock);
+            }
+
+            // ================================================================
+            // 🔄 PRERAČUNAVANJE STANJA RAKETA NA OSNOVU SVIH POTVRDA
+            // ================================================================
+            function recomputeRocketStock() {
+                // Prvo resetuj na početno stanje
+                const initialStock = {};
+                const lines = ROCKET_CSV_DATA.trim().split('\n');
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    const parts = line.split(',').map(s => s.trim());
+                    if (parts.length < 3) continue;
+                    const aName = parts[0];
+                    const pp8 = parseInt(parts[1]);
+                    const td6b = parseInt(parts[2]);
+                    if (!isNaN(pp8) && !isNaN(td6b)) {
+                        initialStock[aName] = { pp8: pp8, td6b: td6b };
+                    }
+                }
+                rocketStock = JSON.parse(JSON.stringify(initialStock));
+
+                // Sada oduzmi sve potvrde koje postoje
+                bPoints.forEach(row => {
+                    if (row.confirmationTime) {
+                        const aName = row.aName;
+                        if (rocketStock[aName]) {
+                            const pp8x = row.pp8x || 0;
+                            const td6bx = row.td6bx || 0;
+                            rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
+                            rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
+                        }
+                    }
+                });
+                console.log('🔄 Stanje raketa reizračunato:', rocketStock);
+                updateARocketTooltips();
+            }
+
+            // ================================================================
+            // 🖱️ AŽURIRANJE TOOLTIPA ZA A MARKERE SA STANJEM RAKETA
+            // ================================================================
+            function updateARocketTooltips() {
+                markerData.forEach(item => {
+                    const aName = item.fpgs;
+                    const stock = rocketStock[aName];
+                    if (stock) {
+                        const popupContent = `<b>${aName}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`;
+                        item.marker.setPopupContent(popupContent);
+                    } else {
+                        // Ako nema podataka o raketama, prikaži samo osnovne informacije
+                        const popupContent = `<b>${aName}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}`;
+                        item.marker.setPopupContent(popupContent);
+                    }
+                });
+            }
+
+            // ================================================================
+            // ✏️ AŽURIRANJE STANJA RAKETA NAKON POTVRDE
+            // ================================================================
+            function updateRocketStockAfterConfirmation(aName, pp8x, td6bx) {
+                if (!rocketStock[aName]) {
+                    console.warn(`⚠️ Nema podataka o raketama za A tačku: ${aName}`);
+                    return;
+                }
+                rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
+                rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
+                console.log(`🚀 Ažurirano stanje za ${aName}: PP8=${rocketStock[aName].pp8}, TD6B=${rocketStock[aName].td6b}`);
+                updateARocketTooltips();
+                // Prikaži status
+                const statusDiv = document.getElementById('status');
+                statusDiv.textContent = `🚀 ${aName}: PP8=${rocketStock[aName].pp8}, TD6B=${rocketStock[aName].td6b}`;
+                statusDiv.style.display = 'block';
+                statusDiv.style.color = '#ffd700';
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+            }
+
+            // ================================================================
+            // 🗺️ A MARKERI I SEKTORI (dodajemo poziv parseRocketData i updateARocketTooltips)
             // ================================================================
             const aIcon = L.divIcon({
                 className: 'a-marker',
@@ -816,6 +1278,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             const markerLayer = L.layerGroup().addTo(map);
             const pp8Layer = L.layerGroup().addTo(map);
             const pp6Layer = L.layerGroup().addTo(map);
+
+            // Prvo parsiraj podatke o raketama
+            parseRocketData();
 
             const lines = csvData.split('\n');
             for (let i = 1; i < lines.length; i++) {
@@ -902,8 +1367,11 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
             document.getElementById('count').textContent = totalSectors;
 
+            // Nakon što su markeri kreirani, ažuriraj tooltipove
+            updateARocketTooltips();
+
             // ================================================================
-            // B IKONICE
+            // B IKONICE (nepromijenjene)
             // ================================================================
             const bIcon = L.divIcon({
                 className: 'b-marker',
@@ -1032,6 +1500,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 bPointsRef.set(data).catch(err => console.warn('Firebase write error:', err));
             }
 
+            // ================================================================
+            // POTVRĐIVANJE – AŽURIRA I RAKETNO STANJE
+            // ================================================================
             function confirmBPoint(row, marker) {
                 if (!canConfirm()) {
                     alert('⚠️ Nemate dozvolu za potvrđivanje.');
@@ -1048,6 +1519,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 row.td6bx = td6bx;
                 row.confirmationDate = confirmNow;
                 row.confirmationTime = confirmNow.toLocaleString();
+
+                // Ažuriraj stanje raketa za odgovarajuću A tačku
+                updateRocketStockAfterConfirmation(row.aName, pp8x, td6bx);
 
                 const popupConfirmed =
                     `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
@@ -1162,6 +1636,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 saveBPointsToFirebase();
             }
 
+            // Brisanje B tačaka (isto)
             function deleteBPoint(row) {
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati.'); return; }
                 if (row.marker) bLayer.removeLayer(row.marker);
@@ -1178,6 +1653,8 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                 }
                 saveBPointsToFirebase();
+                // Recompute stock after deletion (if any confirmed removed)
+                recomputeRocketStock();
             }
 
             function clearBPoints() {
@@ -1197,10 +1674,11 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 hoveringBRow = null;
                 if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
                 saveBPointsToFirebase();
+                recomputeRocketStock();
             }
 
             // ================================================================
-            // B VISIBILITY, SECTORS
+            // B VISIBILITY, SECTORS (nepromijenjeno)
             // ================================================================
             function updateBVisibility() {
                 if (!activeA) {
@@ -1265,7 +1743,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // GRID
+            // GRID (nepromijenjeno, ali ostaje)
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
@@ -1433,7 +1911,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             generateGrid();
 
             // ================================================================
-            // LISTENERI ZA B TAČKE (Firebase)
+            // LISTENERI ZA B TAČKE (Firebase) – nakon učitavanja ponovo izračunaj stanje raketa
             // ================================================================
             function loadBPointsFromFirebase() {
                 if (!firebaseInitialized || !bPointsRef) return;
@@ -1498,6 +1976,8 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         updatePopups();
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
+                        // Nakon učitavanja, ponovo izračunaj stanje raketa
+                        recomputeRocketStock();
                         console.log('B tačke učitane iz Firebase:', bPoints.length);
                     }
                 }).catch(err => console.warn('Firebase read error:', err));
@@ -1568,7 +2048,8 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         updatePopups();
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
-                        statusDiv.textContent = '🔥 Sinhronizovane B tačke';
+                        recomputeRocketStock();
+                        statusDiv.textContent = '🔥 Sinhronizovane B tačke i stanje raketa';
                         statusDiv.style.display = 'block';
                         setTimeout(() => statusDiv.style.display = 'none', 1000);
                         console.log('B tačke ažurirane iz Firebase (real-time):', bPoints.length);
@@ -1577,7 +2058,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // TABELA A-B
+            // TABELA A-B (nepromijenjeno)
             // ================================================================
             function buildTableData() {
                 return bPoints.map(row => ({
@@ -1672,7 +2153,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // TOOLTIP I AZIMUT
+            // TOOLTIP I AZIMUT (nepromijenjeno)
             // ================================================================
             function showHoverTooltip(text, latlng) {
                 hoverTooltip.textContent = text;
@@ -1702,6 +2183,11 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 const dist = haversine(activeA.lat, activeA.lon, latlng.lat, latlng.lng);
                 html += `Azimut od A (${activeA.fpgs}): ${az.toFixed(1)}°<br>Udaljenost: ${dist.toFixed(1)} km`;
                 if (hoveringBRow) html += `<br>PP8: ${hoveringBRow.pp8}  TD6B: ${hoveringBRow.td6b}`;
+                // Prikaži preostale rakete ako je A aktivan
+                const stock = rocketStock[activeA.fpgs];
+                if (stock) {
+                    html += `<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`;
+                }
                 if (pngOverlay && pngVisible && pngImgWidth && pngImgHeight) {
                     const [latMin, lonMin] = PNG_BOUNDS[0];
                     const [latMax, lonMax] = PNG_BOUNDS[1];
@@ -1729,7 +2215,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             });
 
             // ================================================================
-            // EVENTI DUGMADI
+            // EVENTI DUGMADI (nepromijenjeno)
             // ================================================================
             document.getElementById('toggleSectorsBtn').addEventListener('click', function() {
                 sectorsVisible = !sectorsVisible;
@@ -1820,7 +2306,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
             });
 
-            // DUGME ZA POTVRDE – EVENT
             document.getElementById('showConfirmationsBtn').addEventListener('click', function() {
                 loadConfirmations();
             });
@@ -2199,6 +2684,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             console.log('🎨 Urednik kvadrata UID:', GRID_EDITOR_UID);
             console.log('🌐 Server komunikacija aktivirana (auto-load KMZ/PNG).');
             console.log('📏 Ograničenje udaljenosti B tačaka: 8 km.');
+            console.log('🚀 Praćenje stanja raketa uključeno.');
         });
     </script>
 </body>
