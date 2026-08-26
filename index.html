@@ -1946,7 +1946,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             generateGrid();
 
             // ================================================================
-            // LISTENER ZA CONFIRMATIONS (NOVO – AŽURIRA bPoints I TABELU)
+            // 📡 LISTENER ZA CONFIRMATIONS – AŽURIRA bPoints I TABELU (ispravljeno)
             // ================================================================
             function listenConfirmations() {
                 if (!firebaseInitialized) return;
@@ -1958,34 +1958,43 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 confirmationsListener.on('value', snapshot => {
                     console.log('📡 Promjena u confirmations – ažuriram bPoints i tabelu.');
                     const data = snapshot.val();
-                    if (data) {
-                        const confirmations = Object.values(data);
-                        // Za svaku potvrdu, ažuriraj odgovarajući bPoints red
-                        confirmations.forEach(c => {
-                            const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                            if (bPoint && !bPoint.confirmationTime) {
-                                // Ako B tačka već nema potvrdu, dodaj je
-                                bPoint.pp8x = c.pp8x || 0;
-                                bPoint.td6bx = c.td6bx || 0;
-                                bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
-                                bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
-                                // Ažuriraj popup markera
-                                if (bPoint.marker) {
-                                    const popupContent = `PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`;
-                                    bPoint.marker.setPopupContent(popupContent);
-                                }
+                    if (!data) {
+                        console.log('ℹ️ Nema potvrda u confirmations.');
+                        return;
+                    }
+                    const confirmations = Object.values(data);
+                    let updated = false;
+                    confirmations.forEach(c => {
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        if (bPoint) {
+                            // Ažuriraj uvijek (čak i ako već ima potvrdu – osvježi podatke)
+                            bPoint.pp8x = c.pp8x || 0;
+                            bPoint.td6bx = c.td6bx || 0;
+                            bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
+                            bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
+                            // Ažuriraj popup markera
+                            if (bPoint.marker) {
+                                const popupContent = `PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`;
+                                bPoint.marker.setPopupContent(popupContent);
                             }
-                        });
+                            updated = true;
+                            console.log(`✅ Ažurirana B tačka #${bPoint.bIndex} sa potvrdom: PP8X=${bPoint.pp8x}, TD6BX=${bPoint.td6bx}`);
+                        } else {
+                            console.warn(`⚠️ B tačka sa bIndex ${c.bIndex} nije pronađena u bPoints.`);
+                        }
+                    });
+                    if (updated) {
+                        // Ponovo izračunaj stanje raketa
+                        recomputeRocketStock();
+                        // Ako je tabela otvorena, osvježi je
+                        if (tableOverlay.style.display === 'block') {
+                            renderTable();
+                            console.log('📊 Tabela osvježena.');
+                        }
+                        statusDiv.textContent = '✅ Tabela ažurirana sa novim potvrdama';
+                        statusDiv.style.display = 'block';
+                        setTimeout(() => statusDiv.style.display = 'none', 2000);
                     }
-                    // Ponovo izračunaj stanje raketa
-                    recomputeRocketStock();
-                    // Ako je tabela otvorena, osvježi je
-                    if (tableOverlay.style.display === 'block') {
-                        renderTable();
-                    }
-                    statusDiv.textContent = '✅ Tabela ažurirana sa novim potvrdama';
-                    statusDiv.style.display = 'block';
-                    setTimeout(() => statusDiv.style.display = 'none', 2000);
                 });
             }
 
@@ -2720,7 +2729,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         }
                     });
                 }
-                // Dodaj listener za confirmations
                 listenConfirmations();
                 console.log('📡 Slušanje Firebase podataka aktivirano (uključujući confirmations).');
             }
