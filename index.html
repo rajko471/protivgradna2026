@@ -256,7 +256,7 @@
             // 1,8,3
             const ROCKET_CSV_DATA = `
     A naziv,PP8,TD6B
-NT,0,0
+    NT,0,0
 1,6,0
 4,4,0
 13,6,0
@@ -597,7 +597,6 @@ VU01,3,2
 PE01,4,3
 PE02,4,3
 PE03,4,3`;
-    
 
             // ================================================================
             // 🔥 FIREBASE KONFIGURACIJA
@@ -775,7 +774,6 @@ PE03,4,3`;
                     showRegisterLink.style.display = 'inline';
                 });
             } else {
-                // Ako nema auth, sakrij login i bypass
                 console.warn('⚠️ Firebase Auth nije dostupan – prelazim na bypass.');
                 loginOverlay.style.display = 'none';
             }
@@ -800,6 +798,7 @@ PE03,4,3`;
             let totalSectors = 0;
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
+            let confirmationsListener = null;
 
             // ---- RAKETNO STANJE ----
             let rocketStock = {}; // { aName: { pp8: number, td6b: number } }
@@ -1209,6 +1208,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     }
                 }
                 rocketStock = JSON.parse(JSON.stringify(initialStock));
+                // Oduzmi sve potvrde iz bPoints (one koje je vlasnik već upisao)
                 bPoints.forEach(row => {
                     if (row.confirmationTime) {
                         const aName = row.aName;
@@ -1220,7 +1220,33 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         }
                     }
                 });
-                console.log('🔄 Stanje raketa reizračunato:', rocketStock);
+                // Također oduzmi sve potvrde iz confirmations čvora (koje je potvrđivač poslao, a vlasnik još nije upisao u bPoints)
+                if (firebaseInitialized) {
+                    const confirmRef = firebaseDb.ref('confirmations');
+                    confirmRef.once('value').then(snapshot => {
+                        const data = snapshot.val();
+                        if (data) {
+                            const confirmations = Object.values(data);
+                            confirmations.forEach(c => {
+                                const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                                if (bPoint) {
+                                    const aName = bPoint.aName;
+                                    if (rocketStock[aName]) {
+                                        const pp8x = c.pp8x || 0;
+                                        const td6bx = c.td6bx || 0;
+                                        rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
+                                        rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
+                                    }
+                                }
+                            });
+                        }
+                        updateARocketTooltips();
+                        console.log('🔄 Stanje raketa reizračunato (sa confirmations):', rocketStock);
+                    }).catch(err => console.warn('Greška pri čitanju confirmations:', err));
+                } else {
+                    updateARocketTooltips();
+                    console.log('🔄 Stanje raketa reizračunato (bez Firebase):', rocketStock);
+                }
                 updateARocketTooltips();
             }
 
@@ -1242,7 +1268,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // ✏️ AŽURIRANJE STANJA RAKETA NAKON POTVRDE
+            // ✏️ AŽURIRANJE STANJA RAKETA NAKON POTVRDE (lokalno)
             // ================================================================
             function updateRocketStockAfterConfirmation(aName, pp8x, td6bx) {
                 if (!rocketStock[aName]) {
@@ -1388,7 +1414,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             // 🛡️ FUNKCIJE ZA ULOGE – SA BYPASS ZA LOCALHOST
             // ================================================================
             function isOwner() {
-                // Ako smo na localhost, automatski vlasnik
                 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                     return true;
                 }
@@ -1506,7 +1531,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // POTVRĐIVANJE – AŽURIRA I RAKETNO STANJE
+            // POTVRĐIVANJE – AŽURIRA I RAKETNO STANJE I OSVJEŽAVA TABELU
             // ================================================================
             function confirmBPoint(row, marker) {
                 if (!canConfirm()) {
@@ -1525,6 +1550,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 row.confirmationDate = confirmNow;
                 row.confirmationTime = confirmNow.toLocaleString();
 
+                // Ažuriraj stanje raketa za odgovarajuću A tačku (lokalno)
                 updateRocketStockAfterConfirmation(row.aName, pp8x, td6bx);
 
                 const popupConfirmed =
@@ -1539,7 +1565,10 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 if (firebaseInitialized && bPointsRef) {
                     if (isOwner()) {
                         saveBPointsToFirebase();
+                        // Ako je vlasnik, odmah osvježi tabelu
+                        if (tableOverlay.style.display === 'block') renderTable();
                     } else {
+                        // Potvrđivač šalje zahtjev – čuvamo i email
                         const confirmRef = firebaseDb.ref('confirmations').push();
                         confirmRef.set({
                             bIndex: row.bIndex,
@@ -1550,12 +1579,17 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                             confirmedByEmail: currentUser ? currentUser.email : 'unknown'
                         }).then(() => {
                             console.log('✅ Zahtjev za potvrdu poslan.');
+                            // Nakon slanja, ponovo izračunaj stanje (da bi i potvrđivaču odmah prikazalo)
+                            recomputeRocketStock();
+                            // Osvježi tabelu ako je otvorena
+                            if (tableOverlay.style.display === 'block') renderTable();
                         }).catch(err => {
                             console.error('❌ Greška pri slanju zahtjeva:', err);
                         });
                     }
                 }
 
+                // Osvježi tabelu (ako je otvorena) – već smo to uradili unutar uslova, ali za svaki slučaj:
                 if (tableOverlay.style.display === 'block') renderTable();
             }
 
@@ -1679,7 +1713,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // B VISIBILITY, SECTORS, GRID (nepromijenjeno, ali ostaje)
+            // B VISIBILITY, SECTORS, GRID (nepromijenjeno)
             // ================================================================
             function updateBVisibility() {
                 if (!activeA) {
@@ -1744,7 +1778,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // GRID (skraćeno – ista logika)
+            // GRID (nepromijenjeno)
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
@@ -1910,6 +1944,50 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 }
             }
             generateGrid();
+
+            // ================================================================
+            // LISTENER ZA CONFIRMATIONS (NOVO – AŽURIRA bPoints I TABELU)
+            // ================================================================
+            function listenConfirmations() {
+                if (!firebaseInitialized) return;
+                const confirmRef = firebaseDb.ref('confirmations');
+                if (confirmationsListener) {
+                    confirmationsListener.off();
+                }
+                confirmationsListener = confirmRef;
+                confirmationsListener.on('value', snapshot => {
+                    console.log('📡 Promjena u confirmations – ažuriram bPoints i tabelu.');
+                    const data = snapshot.val();
+                    if (data) {
+                        const confirmations = Object.values(data);
+                        // Za svaku potvrdu, ažuriraj odgovarajući bPoints red
+                        confirmations.forEach(c => {
+                            const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                            if (bPoint && !bPoint.confirmationTime) {
+                                // Ako B tačka već nema potvrdu, dodaj je
+                                bPoint.pp8x = c.pp8x || 0;
+                                bPoint.td6bx = c.td6bx || 0;
+                                bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
+                                bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
+                                // Ažuriraj popup markera
+                                if (bPoint.marker) {
+                                    const popupContent = `PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`;
+                                    bPoint.marker.setPopupContent(popupContent);
+                                }
+                            }
+                        });
+                    }
+                    // Ponovo izračunaj stanje raketa
+                    recomputeRocketStock();
+                    // Ako je tabela otvorena, osvježi je
+                    if (tableOverlay.style.display === 'block') {
+                        renderTable();
+                    }
+                    statusDiv.textContent = '✅ Tabela ažurirana sa novim potvrdama';
+                    statusDiv.style.display = 'block';
+                    setTimeout(() => statusDiv.style.display = 'none', 2000);
+                });
+            }
 
             // ================================================================
             // LISTENERI ZA B TAČKE (Firebase)
@@ -2609,7 +2687,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }, 1500);
 
             // ================================================================
-            // FIREBASE LISTENERI
+            // FIREBASE LISTENERI (UKLJUČUJUĆI confirmations)
             // ================================================================
             function startListening() {
                 if (!firebaseInitialized) return;
@@ -2642,7 +2720,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         }
                     });
                 }
-                console.log('📡 Slušanje Firebase podataka aktivirano.');
+                // Dodaj listener za confirmations
+                listenConfirmations();
+                console.log('📡 Slušanje Firebase podataka aktivirano (uključujući confirmations).');
             }
 
             // ================================================================
@@ -2667,9 +2747,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                             listenGridColors();
                         }
                     } else {
-                        // Ako nema korisnika, provjeri da li smo na localhost
                         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                            // Na localhostu automatski prelazimo u vlasnički mod
                             loginOverlay.style.display = 'none';
                             currentUser = null;
                             setTimeout(() => {
@@ -2692,9 +2770,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     }
                 });
             } else {
-                // Ako nema auth, sakrij login i bypass
                 loginOverlay.style.display = 'none';
-                // Inicijalizuj Firebase i dalje ako je dostupan
                 if (firebaseInitialized) {
                     bPointsRef = firebaseDb.ref('bPoints');
                     gridColorsRef = firebaseDb.ref('gridColors');
@@ -2719,8 +2795,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             console.log('🎨 Urednik kvadrata UID:', GRID_EDITOR_UID);
             console.log('🌐 Server komunikacija aktivirana (auto-load KMZ/PNG).');
             console.log('📏 Ograničenje udaljenosti B tačaka: 8 km.');
-            console.log('🚀 Praćenje stanja raketa uključeno.');
+            console.log('🚀 Praćenje stanja raketa uključeno (sinhronizacija preko confirmations).');
             console.log('🔓 Bypass za localhost: automatski si vlasnik.');
+            console.log('📊 Tabela se automatski ažurira pri svakoj novoj potvrdi.');
         });
     </script>
 </body>
