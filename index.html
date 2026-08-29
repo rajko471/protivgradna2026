@@ -1420,21 +1420,20 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             updateARocketTooltips();
 
             // ================================================================
-            // B IKONICE
-            // ================================================================
-            const bIcon = L.divIcon({
-                className: 'b-marker',
-                html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
-                iconSize: [16, 16],
-                iconAnchor: [8, 8]
-            });
-            const bIconGray = L.divIcon({
+// B IKONICE
+// ================================================================
+const bIcon = L.divIcon({
+    className: 'b-marker',
+    html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
+});
+const bIconGray = L.divIcon({
     className: 'b-marker-gray',
-    html: '<div style="width:10px;height:10px;background:#696969;border-radius:50%;border:2px solid #999;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
+    html: '<div style="width:10px;height:10px;background:#999;border-radius:50%;border:2px solid #ccc;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
     iconSize: [14, 14],
     iconAnchor: [7, 7]
 });
-
             // ================================================================
             // 🛡️ FUNKCIJE ZA ULOGE – SA BYPASS ZA LOCALHOST
             // ================================================================
