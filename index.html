@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
@@ -1159,7 +1159,8 @@ GD15,45.169225,17.113403,42000,1,300,118,,,,,,,288,121,132,142,,,,,4,8,2.25,4.5,
 GD17,45.058430,17.269131,42000,1,334,7,80,140,,,,,350,60,80,150,,,,,4,8,2.25,4.5,90501
 LA01,44.792425,17.319894,42000,1,164,190,220,359,,,,,176,190,201,285,325,347,,,4,8,2.25,4.5,90502
 LA02,44.812311,17.389103,42000,1,196,218,274,289,299,323,,,196,218,274,289,299,323,,,4,8,2.25,4.5,90502
-LA03,44.839839,17.289981,42000,1,190,21,124,179,,,,,210,21,124,179,,,,,4,8,2.25,4.5,90502
+LA03,44.839839,17.289981,42000,1,190,21,// Redni broj: gore = 11, dolje = 27 (17 redova)
+const redBroj = 27 - i;124,179,,,,,210,21,124,179,,,,,4,8,2.25,4.5,90502
 LA04,44.875922,17.421233,42000,1,106,159,254,313,,,,,81,159,280,310,,,,,4,8,2.25,4.5,90502
 LA05,44.898044,17.199706,42000,1,35,232,,,,,,,78,232,266,283,,,,,4,8,2.25,4.5,90502
 LA06,44.899706,17.333636,42000,1,191,204,215,340,,,,,113,129,215,340,,,,,4,8,2.25,4.5,90502
@@ -1730,8 +1731,8 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 for (let i = 0; i < nLatRows; i++) {
                     const latMin = latStart + i * latStep;
                     const latMax = latMin + latStep;
-                    // Redni broj od dna prema gore: 29, 28, ..., 13
-                    const redBroj = 29 - i;
+                    // Redni broj: gore = 11, dolje = 27 (17 redova)
+                       const redBroj = 27 - i;
 
                     for (let j = 0; j < nLonCols; j++) {
                         const lonMin = lonStart + j * lonStep;
@@ -1748,9 +1749,2394 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         rect._latMin = latMin; rect._latMax = latMax;
                         rect._lonMin = lonMin; rect._lonMax = lonMax;
 
-                        // Slovo: A..H, J..Q (preskače se I)
-                        const slovo = String.fromCharCode(65 + j + (j >= 8 ? 1 : 0));
-                        const id = slovo + redBroj;
+                        // Slovo: D..H, J..T (preskače se I), 16 kolona
+                           const slovo = String.fromCharCode(68 + j + (j >= 5 ? 1 : 0));
+                           const id = slovo + redBroj;
+
+                        rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
+                        rect.on('mouseout', () => hideHoverTooltip());
+
+                        rect.on('click', function(e) {
+                            if (!canEditGrid()) { alert('⚠️ Samo vlasnik ili urednik kvadrata može mijenjati boje.'); return; }
+                            if (selectedGridColor) {
+                                let iG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iG !== -1) greenCells.splice(iG, 1);
+                                let iB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iB !== -1) blueCells.splice(iB, 1);
+                                let iR = redCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iR !== -1) redCells.splice(iR, 1);
+                                let color;
+                                if (selectedGridColor === 'green') { greenCells.push({ latMin, latMax, lonMin, lonMax }); color = '#00ff00'; }
+                                else if (selectedGridColor === 'blue') { blueCells.push({ latMin, latMax, lonMin, lonMax }); color = '#0055ff'; }
+                                else if (selectedGridColor === 'red') { redCells.push({ latMin, latMax, lonMin, lonMax }); color = '#ff0000'; }
+                                else return;
+                                this.setStyle({ color, weight: 4, opacity: 1 });
+                                saveGridColorsToFirebase();
+                                L.DomEvent.stopPropagation(e);
+                            }
+                        });
+
+                        rect.on('contextmenu', function(e) {
+                            if (!canEditGrid()) return;
+                            this.setStyle({ color: 'black', weight: 2, opacity: 1 });
+                            let iG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iG !== -1) greenCells.splice(iG, 1);
+                            let iB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iB !== -1) blueCells.splice(iB, 1);
+                            let iR = redCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iR !== -1) redCells.splice(iR, 1);
+                            saveGridColorsToFirebase();
+                            L.DomEvent.stopPropagation(e);
+                            L.DomEvent.preventDefault(e);
+                        });
+
+                        rect.addTo(gridLayer);
+                        gridCells.push(rect);
+                    }
+                }
+            }
+            generateGrid();
+
+            function listenConfirmations() {
+                if (!firebaseInitialized) return;
+                if (confirmationsListener) confirmationsListener.off();
+                confirmationsListener = firebaseDb.ref('confirmations');
+                confirmationsListener.on('value', snapshot => {
+                    const data = snapshot.val();
+                    if (!data) return;
+                    let updated = false;
+                    Object.values(data).forEach(c => {
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        if (bPoint) {
+                            bPoint.pp8x = c.pp8x || 0;
+                            bPoint.td6bx = c.td6bx || 0;
+                            bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
+                            bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
+                            if (bPoint.marker) {
+                                bPoint.marker.setPopupContent(`PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`);
+                            }
+                            updated = true;
+                        }
+                    });
+                    if (updated) {
+                        recomputeRocketStock();
+                        if (tableOverlay.style.display === 'block') renderTable();
+                    }
+                });
+            }
+
+            function loadBPointsFromFirebase() {
+                if (!firebaseInitialized || !bPointsRef) return;
+                bPointsRef.once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (data && Array.isArray(data)) {
+                        bLayer.clearLayers();
+                        bPoints = [];
+                        bCounter = 0;
+                        data.forEach(rowData => {
+                            bCounter++;
+                            const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
+                            const row = {
+                                bIndex: rowData.bIndex || bCounter, bLat: rowData.bLat, bLon: rowData.bLon,
+                                bDate: now, bTime: rowData.bTime || now.toLocaleString(),
+                                aName: rowData.aName || '', az: rowData.az || 0, dist: rowData.dist || 0,
+                                pp8: rowData.pp8 || 0, td6b: rowData.td6b || 0,
+                                pp8x: rowData.pp8x || 0, td6bx: rowData.td6bx || 0,
+                                confirmationTime: rowData.confirmationTime || null,
+                                confirmationDate: rowData.confirmationDate ? new Date(rowData.confirmationDate) : null,
+                                marker: null
+                            };
+                            bPoints.push(row);
+                            const marker = L.marker([row.bLat, row.bLon], { icon: bIcon })
+                                .addTo(bLayer)
+                                .bindPopup(row.confirmationTime ?
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}` :
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`);
+                            marker.on('mouseover', e => {
+                                const prefix = row.confirmationTime ? 'B#' : 'B$';
+                                showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
+                                hoveringBRow = row;
+                                updateMouseAzimuth(e.latlng);
+                            });
+                            marker.on('mouseout', () => {
+                                hideHoverTooltip();
+                                hoveringBRow = null;
+                                if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                            });
+                            marker.on('contextmenu', function(e) {
+                                L.DomEvent.stopPropagation(e);
+                                L.DomEvent.preventDefault(e);
+                                confirmBPoint(row, marker);
+                            });
+                            marker.on('click', function(e) {
+                                if (deleteMode && isOwner()) {
+                                    deleteBPoint(row);
+                                    L.DomEvent.stopPropagation(e);
+                                    L.DomEvent.preventDefault(e);
+                                }
+                            });
+                            row.marker = marker;
+                        });
+                        updatePopups();
+                        updateMouseInfo();
+                        if (tableOverlay.style.display === 'block') renderTable();
+                        recomputeRocketStock();
+                    }
+                });
+            }
+
+            function listenBPoints() {
+                if (!firebaseInitialized || !bPointsRef) return;
+                if (bPointsListener) bPointsListener.off();
+                bPointsListener = bPointsRef;
+                bPointsListener.on('value', snapshot => {
+                    const data = snapshot.val();
+                    if (data && Array.isArray(data)) {
+                        bLayer.clearLayers();
+                        bPoints = [];
+                        bCounter = 0;
+                        data.forEach(rowData => {
+                            bCounter++;
+                            const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
+                            const row = {
+                                bIndex: rowData.bIndex || bCounter, bLat: rowData.bLat, bLon: rowData.bLon,
+                                bDate: now, bTime: rowData.bTime || now.toLocaleString(),
+                                aName: rowData.aName || '', az: rowData.az || 0, dist: rowData.dist || 0,
+                                pp8: rowData.pp8 || 0, td6b: rowData.td6b || 0,
+                                pp8x: rowData.pp8x || 0, td6bx: rowData.td6bx || 0,
+                                confirmationTime: rowData.confirmationTime || null,
+                                confirmationDate: rowData.confirmationDate ? new Date(rowData.confirmationDate) : null,
+                                marker: null
+                            };
+                            bPoints.push(row);
+                            const marker = L.marker([row.bLat, row.bLon], { icon: bIcon })
+                                .addTo(bLayer)
+                                .bindPopup(row.confirmationTime ?
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}` :
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`);
+                            marker.on('mouseover', e => {
+                                const prefix = row.confirmationTime ? 'B#' : 'B$';
+                                showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
+                                hoveringBRow = row;
+                                updateMouseAzimuth(e.latlng);
+                            });
+                            marker.on('mouseout', () => {
+                                hideHoverTooltip();
+                                hoveringBRow = null;
+                                if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                            });
+                            marker.on('contextmenu', function(e) {
+                                L.DomEvent.stopPropagation(e);
+                                L.DomEvent.preventDefault(e);
+                                confirmBPoint(row, marker);
+                            });
+                            marker.on('click', function(e) {
+                                if (deleteMode && isOwner()) {
+                                    deleteBPoint(row);
+                                    L.DomEvent.stopPropagation(e);
+                                    L.DomEvent.preventDefault(e);
+                                }
+                            });
+                            row.marker = marker;
+                        });
+                        updatePopups();
+                        updateMouseInfo();
+                        if (tableOverlay.style.display === 'block') renderTable();
+                        recomputeRocketStock();
+                    }
+                });
+            }
+
+            function buildTableData() {
+                return bPoints.map(row => ({
+                    'B redni': row.bIndex,
+                    'B lat': row.bLat.toFixed(6),
+                    'B lon': row.bLon.toFixed(6),
+                    'Vrijeme B': formatTimeHHMMSS(row.bDate),
+                    'A naziv': row.aName,
+                    'Azimut (°)': row.az.toFixed(1),
+                    'Udaljenost (km)': row.dist.toFixed(1),
+                    'PP8': row.pp8,
+                    'TD6B': row.td6b,
+                    'PP8X': row.confirmationTime ? row.pp8x : '-',
+                    'TD6BX': row.confirmationTime ? row.td6bx : '-',
+                    'ПОТВЕРДА': row.confirmationDate ? formatTimeHHMMSS(row.confirmationDate) : '-'
+                }));
+            }
+
+            function renderTable() {
+                const data = buildTableData();
+                if (data.length === 0) { tableWrapper.innerHTML = '<p>Nema podataka.</p>'; return; }
+                let html = '<table><thead><tr>';
+                const headers = Object.keys(data[0]);
+                headers.forEach(h => html += `<th>${h}</th>`);
+                html += '</tr></thead><tbody>';
+                data.forEach(row => {
+                    html += '<tr>';
+                    headers.forEach(h => html += `<td>${row[h]}</td>`);
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                tableWrapper.innerHTML = html;
+            }
+
+            function loadConfirmations() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
+                if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
+                firebaseDb.ref('confirmations').once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (!data) { alert('ℹ️ Nema potvrda.'); return; }
+                    const confirmations = Object.values(data);
+                    if (confirmations.length === 0) { alert('ℹ️ Nema potvrda.'); return; }
+                    confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
+
+                    let html = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;">';
+                    html += '<div style="background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);">';
+                    html += '<h3>📋 Potvrde</h3>';
+                    html += '<button onclick="this.closest(\'div[style*=\'position:fixed\']\').remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+                    html += '<thead><tr><th>B redni</th><th>A naziv</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
+                    confirmations.forEach(c => {
+                        const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
+                        const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        const aName = bPoint ? bPoint.aName : '-';
+                        html += `<tr><td>${c.bIndex}</td><td>${aName}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
+                    });
+                    html += '</tbody></table></div></div>';
+                    const modalContainer = document.createElement('div');
+                    modalContainer.innerHTML = html;
+                    const modalElement = modalContainer.firstElementChild;
+                    document.body.appendChild(modalElement);
+                    modalElement.addEventListener('click', function(e) { if (e.target === this) this.remove(); });
+                });
+            }
+
+            function showHoverTooltip(text, latlng) {
+                hoverTooltip.textContent = text;
+                hoverTooltip.style.display = 'block';
+                const point = map.latLngToContainerPoint(latlng);
+                hoverTooltip.style.left = (point.x + 10) + 'px';
+                hoverTooltip.style.top = (point.y - 10) + 'px';
+            }
+            function hideHoverTooltip() {
+                hoverTooltip.style.display = 'none';
+                hoverTooltip.textContent = '';
+            }
+
+            function updateMouseAzimuth(latlng) {
+                let html = '';
+                if (currentKmzName) {
+                    const dateStr = currentKmzModified ? new Date(currentKmzModified).toLocaleString() : '';
+                    const sizeStr = currentKmzSize ? (currentKmzSize / 1024).toFixed(1) + ' KB' : '';
+                    html += `📄 ${currentKmzName}${dateStr ? '  ' + dateStr : ''}${sizeStr ? '  (' + sizeStr + ')' : ''}<br>`;
+                }
+                if (!activeA) { html += 'Nema aktivnog A<br>Kliknite na A marker'; mouseAzimuthDiv.innerHTML = html; return; }
+                const az = bearing(activeA.lat, activeA.lon, latlng.lat, latlng.lng);
+                const dist = haversine(activeA.lat, activeA.lon, latlng.lat, latlng.lng);
+                html += `Azimut od A (${activeA.fpgs}): ${az.toFixed(1)}°<br>Udaljenost: ${dist.toFixed(1)} km`;
+                if (hoveringBRow) html += `<br>PP8: ${hoveringBRow.pp8}  TD6B: ${hoveringBRow.td6b}`;
+                const stock = rocketStock[activeA.fpgs];
+                if (stock) html += `<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`;
+                if (pngOverlay && pngVisible && pngImgWidth && pngImgHeight) {
+                    const [latMin, lonMin] = PNG_BOUNDS[0];
+                    const [latMax, lonMax] = PNG_BOUNDS[1];
+                    if (latlng.lat >= latMin && latlng.lat <= latMax && latlng.lng >= lonMin && latlng.lng <= lonMax) {
+                        const px = ((latlng.lng - lonMin) / (lonMax - lonMin)) * pngImgWidth;
+                        const py = ((latMax - latlng.lat) / (latMax - latMin)) * pngImgHeight;
+                        html += `<br>Piksel: ${Math.round(px)}, ${Math.round(py)}`;
+                    }
+                }
+                mouseAzimuthDiv.innerHTML = html;
+            }
+
+            function updateMouseInfo() {
+                if (!activeA) { mouseAzimuthDiv.innerHTML = 'Nema aktivnog A<br>Kliknite na A marker'; return; }
+                if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+            }
+
+            map.on('mousemove', function(e) {
+                lastMouseLatLng = e.latlng;
+                updateMouseAzimuth(e.latlng);
+            });
+
+            map.on('click', function(e) {
+                addBPoint(e.latlng.lat, e.latlng.lng);
+            });
+
+            document.getElementById('toggleSectorsBtn').addEventListener('click', function() {
+                sectorsVisible = !sectorsVisible;
+                this.textContent = sectorsVisible ? '📐' : '📐🚫';
+                this.className = sectorsVisible ? 'sectors-on' : 'sectors-off';
+                updateSectorsVisibility();
+            });
+
+            document.getElementById('clearABtn').addEventListener('click', function() {
+                if (activeA) { activeA.marker.setIcon(aIcon); activeA = null; activeAKey = null; }
+                filterByA = false;
+                document.getElementById('activeAName').textContent = '-';
+                updateSectorsVisibility();
+                updatePopups();
+                if (firebaseInitialized && activeARef) activeARef.set(null);
+            });
+
+            const toggleABtn = document.getElementById('toggleABtn');
+            let aVisible = true;
+            toggleABtn.addEventListener('click', function() {
+                if (aVisible) { map.removeLayer(markerLayer); aVisible = false; this.className = 'a-off'; }
+                else { map.addLayer(markerLayer); aVisible = true; this.className = 'a-on'; }
+            });
+
+            document.getElementById('showTableBtn').addEventListener('click', function() {
+                if (tableOverlay.style.display === 'block') tableOverlay.style.display = 'none';
+                else { tableOverlay.style.display = 'block'; renderTable(); }
+            });
+
+            document.getElementById('openTableTabBtn').addEventListener('click', function() {
+                const data = buildTableData();
+                if (data.length === 0) { alert('❌ Nema podataka.'); return; }
+                let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tabela A-B</title>';
+                html += '<style>body{font-family:sans-serif;padding:15px;max-width:70%;margin:0 auto;background:#f9f9f9;}';
+                html += 'table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;}';
+                html += 'th,td{border:1px solid #ccc;padding:6px 8px;text-align:center;}';
+                html += 'th{background:#f0f0f0;}</style></head><body>';
+                html += '<h2>Presjek A-B</h2><table><thead><tr>';
+                const headers = Object.keys(data[0]);
+                headers.forEach(h => html += `<th>${h}</th>`);
+                html += '</tr></thead><tbody>';
+                data.forEach(row => { html += '<tr>'; headers.forEach(h => html += `<td>${row[h]}</td>`); html += '</tr>'; });
+                html += '</tbody></table></body></html>';
+                const newWindow = window.open('', '_blank');
+                if (newWindow) { newWindow.document.write(html); newWindow.document.close(); }
+            });
+
+            document.getElementById('closeTableBtn').addEventListener('click', function() { tableOverlay.style.display = 'none'; });
+
+            document.getElementById('exportExcelBtn').addEventListener('click', function() {
+                const data = buildTableData();
+                if (data.length === 0) { alert('❌ Nema podataka.'); return; }
+                try {
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Presjek');
+                    const now = new Date();
+                    const fileName = `presjek_AB_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}.xlsx`;
+                    XLSX.writeFile(wb, fileName);
+                    alert('✅ Excel sačuvan:\n' + fileName);
+                } catch (e) { alert('❌ Greška: ' + e.message); }
+            });
+
+            document.getElementById('showConfirmationsBtn').addEventListener('click', loadConfirmations);
+
+            document.getElementById('clearBbtn').addEventListener('click', function() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik.'); return; }
+                if (bPoints.length === 0) { alert('ℹ️ Nema B tačaka.'); return; }
+                if (!confirm(`⚠️ Obrisati svih ${bPoints.length} B tačaka?`)) return;
+                clearBPoints();
+                alert('✅ Obrisano.');
+            });
+
+            const deleteBtn = document.getElementById('deleteSelectedB');
+            deleteBtn.addEventListener('click', function() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik.'); return; }
+                deleteMode = !deleteMode;
+                this.classList.toggle('delete-mode');
+                this.textContent = deleteMode ? '❌B (aktivan)' : '❌B';
+            });
+
+            ['gridBlue','gridGreen','gridRed'].forEach(id => {
+                document.getElementById(id).addEventListener('click', function() {
+                    if (!canEditGrid()) { alert('⚠️ Samo vlasnik ili urednik kvadrata.'); return; }
+                    const color = id === 'gridBlue' ? 'blue' : id === 'gridGreen' ? 'green' : 'red';
+                    if (this.classList.contains('active')) {
+                        this.classList.remove('active');
+                        if (selectedGridColor === color) selectedGridColor = null;
+                    } else {
+                        this.classList.add('active');
+                        ['gridBlue','gridGreen','gridRed'].forEach(c => {
+                            if (c !== id) document.getElementById(c).classList.remove('active');
+                        });
+                        selectedGridColor = color;
+                    }
+                });
+            });
+
+            document.getElementById('gridReset').addEventListener('click', function() {
+                if (!canEditGrid()) { alert('⚠️ Samo vlasnik ili urednik kvadrata.'); return; }
+                gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2, opacity: 1 }));
+                greenCells = []; blueCells = []; redCells = [];
+                saveGridColorsToFirebase();
+            });
+
+            function setupDropdown(btnId, contentId, callback) {
+                const btn = document.getElementById(btnId);
+                const content = document.getElementById(contentId);
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    content.classList.toggle('show-dropdown');
+                    document.querySelectorAll('.dropdown-content').forEach(el => {
+                        if (el.id !== contentId) el.classList.remove('show-dropdown');
+                    });
+                });
+                content.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const btnEl = e.target.closest('button');
+                    if (!btnEl) return;
+                    const val = btnEl.dataset.value;
+                    if (val !== undefined) {
+                        callback(parseInt(val));
+                        btn.textContent = btn.textContent.split('-')[0] + '-' + val;
+                        content.classList.remove('show-dropdown');
+                    }
+                });
+            }
+            setupDropdown('pp8DropdownBtn', 'pp8DropdownContent', v => selectedPP8 = v);
+            setupDropdown('pp8xDropdownBtn', 'pp8xDropdownContent', v => selectedPP8X = v);
+            setupDropdown('td6bDropdownBtn', 'td6bDropdownContent', v => selectedTD6B = v);
+            setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
+
+            const loadKmzBtn = document.getElementById('loadKmzBtn');
+            const fileInput = document.getElementById('fileInput');
+            loadKmzBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    JSZip.loadAsync(event.target.result).then(function(zip) {
+                        let imageFile = null, kmlFile = null;
+                        zip.forEach(function(relPath, zipEntry) {
+                            if (zipEntry.name.match(/\.(png|jpg|jpeg)$/i)) imageFile = zipEntry;
+                            else if (zipEntry.name.match(/\.kml$/i)) kmlFile = zipEntry;
+                        });
+                        if (!imageFile) { alert('Nema slike.'); fileInput.value = ''; return; }
+                        imageFile.async('blob').then(function(blob) {
+                            const url = URL.createObjectURL(blob);
+                            function addOverlay(bounds) {
+                                if (pngOverlay) map.removeLayer(pngOverlay);
+                                pngOverlay = L.imageOverlay(url, bounds, { opacity: 0.7 }).addTo(map);
+                                pngVisible = true;
+                                document.getElementById('radarToggle').className = 'radar-on';
+                                document.getElementById('radarToggle').textContent = '🖼️ ON';
+                                fileInput.value = '';
+                            }
+                            if (kmlFile) {
+                                kmlFile.async('text').then(kmlText => {
+                                    try {
+                                        const xml = new DOMParser().parseFromString(kmlText, 'text/xml');
+                                        const box = xml.querySelector('LatLonBox');
+                                        if (box) {
+                                            const n = parseFloat(box.querySelector('north').textContent);
+                                            const s = parseFloat(box.querySelector('south').textContent);
+                                            const ea = parseFloat(box.querySelector('east').textContent);
+                                            const w = parseFloat(box.querySelector('west').textContent);
+                                            if (!isNaN(n) && !isNaN(s) && !isNaN(ea) && !isNaN(w)) { addOverlay([[s, w], [n, ea]]); return; }
+                                        }
+                                    } catch (err) {}
+                                    const c = map.getCenter();
+                                    addOverlay([[c.lat - 0.05, c.lng - 0.05], [c.lat + 0.05, c.lng + 0.05]]);
+                                });
+                            } else {
+                                const c = map.getCenter();
+                                addOverlay([[c.lat - 0.05, c.lng - 0.05], [c.lat + 0.05, c.lng + 0.05]]);
+                            }
+                        });
+                    }).catch(err => { alert('Greška: ' + err.message); fileInput.value = ''; });
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            document.getElementById('radarToggle').addEventListener('click', function() {
+                if (pngOverlay) {
+                    if (map.hasLayer(pngOverlay)) { map.removeLayer(pngOverlay); this.className = 'radar-off'; this.textContent = '🖼️'; }
+                    else { map.addLayer(pngOverlay); this.className = 'radar-on'; this.textContent = '🖼️ ON'; }
+                } else alert('Nema KMZ.');
+            });
+
+            async function loadFromServer(endpoint = '/api/latest-kmz-png') {
+                try {
+                    const r = await fetch(endpoint);
+                    const data = await r.json();
+                    if (!data.success) return false;
+                    currentKmzName = data.name;
+                    currentKmzModified = data.modified;
+                    currentKmzSize = data.size;
+                    const bc = atob(data.data);
+                    const bn = new Array(bc.length);
+                    for (let i = 0; i < bc.length; i++) bn[i] = bc.charCodeAt(i);
+                    const blob = new Blob([new Uint8Array(bn)], { type: 'image/png' });
+                    const url = URL.createObjectURL(blob);
+                    if (pngOverlay) map.removeLayer(pngOverlay);
+                    pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50 }).addTo(map);
+                    pngVisible = true;
+                    document.getElementById('radarToggle').className = 'radar-on';
+                    document.getElementById('radarToggle').textContent = '🖼️ ON';
+                    statusDiv.textContent = `✅ ${data.name}`;
+                    statusDiv.style.display = 'block';
+                    setTimeout(() => statusDiv.style.display = 'none', 3000);
+                    return true;
+                } catch (e) { return false; }
+            }
+
+            function connectWebSocket() {
+                const ws = new WebSocket('ws://localhost:3000');
+                ws.onopen = () => ws.send(JSON.stringify({ type: 'getLatestKmz' }));
+                ws.onmessage = (e) => {
+                    try {
+                        const d = JSON.parse(e.data);
+                        if (d.type === 'newKmz' || d.type === 'latestKmz' || d.type === 'refresh') loadFromServer();
+                    } catch (err) {}
+                };
+                ws.onclose = () => setTimeout(connectWebSocket, 5000);
+                return ws;
+            }
+
+            document.getElementById('refreshBtn').addEventListener('click', async function() {
+                this.disabled = true;
+                this.textContent = '⏳';
+                await loadFromServer();
+                this.textContent = '🔄';
+                this.disabled = false;
+            });
+
+            setTimeout(async () => { await loadFromServer(); connectWebSocket(); }, 1500);
+
+            function startListening() {
+                if (!firebaseInitialized) return;
+                if (bPointsRef) listenBPoints();
+                if (activeARef) {
+                    activeARef.on('value', snapshot => {
+                        const data = snapshot.val();
+                        if (data) {
+                            const found = markerData.find(m => m.fpgs === data.fpgs);
+                            if (found) {
+                                if (activeA) activeA.marker.setIcon(aIcon);
+                                activeA = { fpgs: found.fpgs, lat: found.lat, lon: found.lon, marker: found.marker };
+                                activeA.marker.setIcon(aSelectedIcon);
+                                activeAKey = found.fpgs;
+                                filterByA = true;
+                                document.getElementById('activeAName').textContent = found.fpgs;
+                                updateSectorsVisibility();
+                                updatePopups();
+                            }
+                        } else {
+                            if (activeA) {
+                                activeA.marker.setIcon(aIcon);
+                                activeA = null; activeAKey = null;
+                                document.getElementById('activeAName').textContent = '-';
+                                filterByA = false;
+                                updateSectorsVisibility(); updatePopups();
+                            }
+                        }
+                    });
+                }
+                listenConfirmations();
+            }
+
+            if (auth) {
+                auth.onAuthStateChanged(user => {
+                    if (user) {
+                        currentUser = user;
+                        loginOverlay.style.display = 'none';
+                        setTimeout(updateOwnerUI, 300);
+                        if (firebaseInitialized) {
+                            bPointsRef = firebaseDb.ref('bPoints');
+                            gridColorsRef = firebaseDb.ref('gridColors');
+                            activeARef = firebaseDb.ref('activeA');
+                            startListening();
+                            loadBPointsFromFirebase();
+                            loadGridColorsFromFirebase();
+                            listenGridColors();
+                        }
+                    } else {
+                        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                            loginOverlay.style.display = 'none';
+                            currentUser = null;
+                            setTimeout(updateOwnerUI, 300);
+                            if (firebaseInitialized) {
+                                bPointsRef = firebaseDb.ref('bPoints');
+                                gridColorsRef = firebaseDb.ref('gridColors');
+                                activeARef = firebaseDb.ref('activeA');
+                                startListening();
+                                loadBPointsFromFirebase();
+                                loadGridColorsFromFirebase();
+                                listenGridColors();
+                            }
+                        } else {
+                            loginOverlay.style.display = 'flex';
+                            currentUser = null;
+                            updateOwnerUI();
+                        }
+                    }
+                });
+            } else {
+                loginOverlay.style.display = 'none';
+                if (firebaseInitialized) {
+                    bPointsRef = firebaseDb.ref('bPoints');
+                    gridColorsRef = firebaseDb.ref('gridColors');
+                    activeARef = firebaseDb.ref('activeA');
+                    startListening();
+                    loadBPointsFromFirebase();
+                    loadGridColorsFromFirebase();
+                    listenGridColors();
+                }
+                setTimeout(updateOwnerUI, 300);
+            }
+
+            updateSectorsVisibility();
+            console.log('✅ Planseta pokrenuta – grid poravnat sa geografskom mrežom (16°–20°E, 42°30′–45°20′N)');
+            console.log('📐 Grid: 16 kolona × 17 redova (15′ × 10′), identično kao graticule.');
+        });
+    </script>
+</body>
+</html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planseta – 3 uloge (auto‑load KMZ, potvrde, rakete, geografska mreža)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
+        #map { height:100%; width:100%; cursor: crosshair; }
+        #loginOverlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 99999;
+        }
+        #loginBox {
+            background: white; padding: 30px 40px; border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4); max-width: 360px; width: 90%;
+        }
+        #loginBox h2 { margin-top:0; text-align:center; }
+        #loginBox label { display:block; margin:10px 0 4px; font-weight:600; }
+        #loginBox input { width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; box-sizing:border-box; }
+        #loginBox button { width:100%; margin-top:12px; padding:10px; background:#2b7be4; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; }
+        #loginBox button:hover { background:#1f6ad0; }
+        #loginBox .error { color:red; font-size:13px; margin-top:6px; display:none; }
+        #loginBox .register-link { text-align:center; margin-top:12px; font-size:14px; }
+        #loginBox .register-link a { color:#2b7be4; cursor:pointer; text-decoration:underline; }
+        #registerForm { display:none; margin-top:16px; border-top:1px solid #eee; padding-top:16px; }
+        .custom-control {
+            position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.9); padding: 6px 8px 6px 10px; border-radius: 6px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2); z-index: 1000;
+            display: flex; flex-direction: column; gap: 3px; align-items: center;
+            width: auto; max-height: 90vh; overflow: visible;
+        }
+        .custom-control button, .custom-control .dropdown-btn {
+            width: 25px; height: 25px; border: 1px solid #888; border-radius: 4px;
+            background: #fff; color: #333; font-size: 11px; font-weight: bold;
+            cursor: pointer; line-height: 25px; text-align: center; padding: 0; flex-shrink: 0;
+        }
+        .custom-control button:hover { background: #f0f0f0; }
+        .custom-control button.active { background: #007bff; color: #fff; border-color: #007bff; }
+        .custom-control button.radar-on { background: #28a745; color: #fff; border-color: #28a745; }
+        .custom-control button.radar-off { background: #dc3545; color: #fff; border-color: #dc3545; }
+        .custom-control button.sectors-on { background: #17a2b8; color: #fff; border-color: #17a2b8; }
+        .custom-control button.sectors-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.delete-mode { background: #ff9800; color: #fff; border-color: #ff9800; }
+        .custom-control button.map-on { background: #007bff; color: #fff; border-color: #007bff; }
+        .custom-control button.map-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.a-on { background: #28a745; color: #fff; border-color: #28a745; }
+        .custom-control button.a-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.refresh-btn { background: #17a2b8; color: #fff; border-color: #17a2b8; }
+        .custom-control button.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
+        .custom-control button.grat-on { background: #000000; color: #fff; border-color: #000000; }
+        .custom-control button.grat-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
+        .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .custom-control .separator { width: 70%; height: 1px; background: #ccc; margin: 2px 0; }
+        .custom-control input[type="file"] { display: none; }
+        .delete-btn { opacity: 0.5; cursor: not-allowed; }
+        .delete-btn.owner-active { opacity: 1; cursor: pointer; }
+        .delete-btn.owner-active:hover { background: #f0f0f0; }
+        .grid-btn { opacity: 0.5; cursor: not-allowed; }
+        .grid-btn.grid-active { opacity: 1; cursor: pointer; }
+        .grid-btn.grid-active:hover { background: #f0f0f0; }
+        .owner-only { display: none; }
+        .dropdown-container { position: relative; display: inline-block; overflow: visible; }
+        .dropdown-content {
+            display: none; position: absolute; top: 100%; left: 0; margin-top: 2px;
+            background-color: #f9f9f9; min-width: 100%; width: auto; white-space: nowrap;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 9999; border-radius: 4px;
+            overflow: visible; pointer-events: auto;
+        }
+        .dropdown-content button { width: 100%; height: 28px; border: none; background: #fff; color: #333; font-size: 13px; font-weight: bold; cursor: pointer; line-height: 28px; text-align: center; padding: 0 12px; }
+        .dropdown-content button:hover { background: #ddd; }
+        .show-dropdown { display: block; }
+        #info {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255,255,255,0.85); padding: 2px 12px; border-radius: 10px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.2); z-index: 1000; font-size: 10px;
+            pointer-events: none; text-align: center;
+        }
+        #mouse-azimuth {
+            position: absolute; bottom: 60px; right: 20px;
+            background: rgba(0,0,0,0.7); color: #fff; padding: 4px 12px; border-radius: 4px;
+            font-size: 13px; font-weight: bold; z-index: 1000; pointer-events: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-family: monospace; line-height: 1.4;
+            min-width: 220px; text-align: left;
+        }
+        .status {
+            position: absolute; bottom: 120px; right: 20px;
+            background: rgba(0,0,0,0.6); color: #ffd700; padding: 2px 10px; border-radius: 4px;
+            font-size: 10px; z-index: 1000; pointer-events: none; display: none;
+        }
+        #hoverTooltip {
+            position: absolute; display: none; background: rgba(0,0,0,0.75); color: #fff;
+            padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;
+            pointer-events: none; z-index: 10000; white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        #tableOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; max-height: 50vh;
+            background: white; z-index: 2000; overflow-y: auto; display: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); border-bottom: 2px solid #ccc;
+        }
+        #tableContainer { padding: 10px 20px; max-width: 100%; margin: 0; }
+        #tableContainer table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #tableContainer th, #tableContainer td { border: 1px solid #ccc; padding: 4px 6px; text-align: center; vertical-align: middle; }
+        #tableContainer th { background: #f0f0f0; position: sticky; top: 0; z-index: 10; }
+        .close-table { float: right; background: #dc3545; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; margin-bottom: 6px; }
+        .close-table:hover { background: #c82333; }
+        #permissionBadge {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(0,0,0,0.7); color: #fff; padding: 4px 12px; border-radius: 20px;
+            font-size: 12px; z-index: 1000; pointer-events: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .graticule-label {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #000;
+            border-radius: 2px;
+            padding: 0px 3px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #000;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
+        @media (max-width:600px) {
+            .custom-control { left: 10px; padding: 4px 6px 4px 8px; gap: 2px; max-height: 80vh; }
+            .custom-control button, .custom-control .dropdown-btn { width: 22px; height: 22px; font-size: 10px; line-height: 22px; }
+            .dropdown-content button { height: 24px; font-size: 11px; line-height: 24px; padding: 0 8px; }
+            #info { font-size: 9px; bottom: 10px; }
+            #mouse-azimuth { font-size: 11px; padding: 2px 8px; bottom: 50px; right: 10px; min-width: 140px; }
+            #tableContainer { padding: 10px; max-width: 98%; }
+            #tableContainer table { font-size: 10px; }
+            #tableContainer th, #tableContainer td { padding: 3px 4px; }
+            #tableOverlay { max-height: 40vh; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginOverlay">
+        <div id="loginBox">
+            <h2>📍 Planseta</h2>
+            <div id="loginError" class="error"></div>
+            <label>📧 Email</label>
+            <input type="email" id="loginEmail" placeholder="tvoj@email.com" />
+            <label>🔒 Lozinka</label>
+            <input type="password" id="loginPassword" placeholder="••••••••" />
+            <button id="loginBtn">🔑 Prijavi se</button>
+            <div class="register-link"><a id="showRegisterLink">Registruj se</a></div>
+            <div id="registerForm">
+                <label>📧 Email</label>
+                <input type="email" id="regEmail" placeholder="tvoj@email.com" />
+                <label>🔒 Lozinka (min 6)</label>
+                <input type="password" id="regPassword" placeholder="••••••••" />
+                <button id="registerBtn" style="background:#38a169;">✅ Registruj se</button>
+                <div class="register-link"><a id="showLoginLink">← Nazad na prijavu</a></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <div id="hoverTooltip"></div>
+
+    <div class="custom-control" id="customControl">
+        <button id="toggleMapBtn" class="map-on" title="Prikaži/sakrij mapu">🗺️</button>
+        <span class="separator"></span>
+        <button id="toggleABtn" class="a-on" title="Prikaži/sakrij sve A tačke">A</button>
+        <span class="separator"></span>
+        <button id="gratToggleBtn" class="grat-on" title="Prikaži/sakrij geografsku mrežu">📐</button>
+        <span class="separator"></span>
+        <button id="radarToggle" class="radar-off">🖼️</button>
+        <span class="separator"></span>
+        <button id="loadKmzBtn" title="Učitaj KMZ (PNG)">📁</button>
+        <input type="file" id="fileInput" accept=".kmz" />
+        <span class="separator"></span>
+        <button id="refreshBtn" class="refresh-btn" title="Osvježi sa servera (najnoviji KMZ/PNG)">🔄</button>
+        <span class="separator"></span>
+        <button id="firebaseStatusBtn" class="firebase-off" title="Firebase status">🔥</button>
+        <span class="separator"></span>
+        <button id="showTableBtn" title="Prikaži tabelu A-B">📊</button>
+        <button id="openTableTabBtn" title="Otvori tabelu u novom tabu">📊⬆</button>
+        <button id="exportExcelBtn" title="Sačuvaj kao Excel">💾</button>
+        <button id="showConfirmationsBtn" class="owner-only" title="Prikaži potvrde (samo vlasnik)">✅ Potvrde</button>
+        <button id="clearBbtn" class="delete-btn" title="Obriši sve tačke B (samo vlasnik)">🗑️</button>
+        <button id="deleteSelectedB" class="delete-btn" title="Obriši odabranu tačku B (samo vlasnik)">❌B</button>
+        <button id="clearABtn" title="Poništi izbor A">❌A</button>
+        <span class="separator"></span>
+        <button id="toggleSectorsBtn" class="sectors-on" title="Prikaži/sakrij sektore">📐</button>
+        <span class="separator"></span>
+        <div class="dropdown-container" id="pp8DropdownContainer">
+            <button id="pp8DropdownBtn" class="dropdown-btn" title="Odaberi PP8 sektor (0-4)">P8</button>
+            <div id="pp8DropdownContent" class="dropdown-content">
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
+            </div>
+        </div>
+        <div class="dropdown-container" id="pp8xDropdownContainer">
+            <button id="pp8xDropdownBtn" class="dropdown-btn" title="Odaberi PP8X sektor (0-4)">PX</button>
+            <div id="pp8xDropdownContent" class="dropdown-content">
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
+            </div>
+        </div>
+        <div class="dropdown-container" id="td6bDropdownContainer">
+            <button id="td6bDropdownBtn" class="dropdown-btn" title="Odaberi TD6B sektor (0-4)">T6</button>
+            <div id="td6bDropdownContent" class="dropdown-content">
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
+            </div>
+        </div>
+        <div class="dropdown-container" id="td6bxDropdownContainer">
+            <button id="td6bxDropdownBtn" class="dropdown-btn" title="Odaberi TD6BX sektor (0-4)">TX</button>
+            <div id="td6bxDropdownContent" class="dropdown-content">
+                <button data-value="0">0</button><button data-value="1">1</button>
+                <button data-value="2">2</button><button data-value="3">3</button>
+                <button data-value="4">4</button>
+            </div>
+        </div>
+        <span class="separator"></span>
+        <button id="gridBlue" class="grid-btn" title="Uključi/isključi plavo bojenje okvira">🟦</button>
+        <button id="gridGreen" class="grid-btn" title="Uključi/isključi zeleno bojenje okvira">🟩</button>
+        <button id="gridRed" class="grid-btn" title="Uključi/isključi crveno bojenje okvira">🟥</button>
+        <button id="gridReset" class="grid-btn" title="Vrati sve okvire na crno">⬛</button>
+    </div>
+
+    <div id="info">Sektora: <span id="count">0</span> | B: <span id="bCount">0</span> | U A: <span id="bInACount">0</span> | Centar A: <span id="activeAName">-</span></div>
+    <div id="mouse-azimuth"></div>
+    <div id="status" class="status"></div>
+
+    <div id="tableOverlay">
+        <div id="tableContainer">
+            <button class="close-table" id="closeTableBtn">✕ Zatvori</button>
+            <h3 style="margin-top:0;">Presjek A-B</h3>
+            <div id="tableWrapper" style="max-height:50vh; overflow:auto;"></div>
+        </div>
+    </div>
+
+    <div id="permissionBadge">⏳ Učitavanje...</div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+
+            const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
+            const CONFIRMER_UID = 'dm0cuDRPCmeTfbGZwW3HDurj4qp2';
+            const GRID_EDITOR_UID = 'Xy1NgNTmhUYZHG2qf4nO1CN6qjS2';
+
+            const ROCKET_CSV_DATA = `
+A naziv,PP8,TD6B
+NT,0,0
+1,6,0
+4,4,0
+13,6,0
+17,4,0
+19,4,0
+24,4,0
+36,6,0
+37,6,0
+39,4,0
+41,6,0
+95,0,0
+96,6,0
+97,4,0
+98,5,0
+99,6,0
+130,11,0
+131,11,0
+132,12,0
+133,11,0
+134,12,0
+135,12,0
+136,10,0
+137,10,0
+145,3,0
+146,5,0
+147,6,0
+148,8,0
+149,4,0
+150,7,0
+151,8,0
+152,8,0
+153,5,0
+154,5,0
+156,4,0
+159,6,0
+183,4,0
+184,4,0
+186,4,0
+187,4,0
+188,4,0
+189,4,0
+190,4,0
+191,4,0
+193,6,0
+196,5,0
+198,6,0
+199,6,0
+200,4,0
+202,5,0
+203,4,0
+205,6,0
+206,0,0
+207,5,0
+208,8,0
+209,6,0
+211,11,0
+212,12,0
+213,11,0
+214,12,0
+215,10,0
+216,11,0
+219,4,0
+221,4,0
+223,4,0
+229,6,0
+234,6,0
+235,6,0
+236,6,0
+237,6,0
+238,4,0
+239,3,0
+241,6,0
+242,4,0
+243,3,0
+244,6,0
+245,4,0
+246,6,0
+247,4,0
+248,4,0
+249,4,0
+270,11,0
+271,10,0
+272,10,0
+273,8,0
+274,12,0
+275,10,0
+276,10,0
+277,11,0
+278,8,0
+279,3,0
+280,9,0
+281,7,0
+282,9,0
+283,6,0
+284,8,0
+285,0,0
+286,10,0
+287,2,0
+288,6,0
+289,6,0
+290,5,0
+291,9,0
+292,6,0
+293,6,0
+100,4,0
+101,6,0
+102,6,0
+103,5,0
+104,6,0
+105,6,0
+106,7,0
+107,6,0
+108,4,0
+109,4,0
+110,6,0
+111,6,0
+112,5,0
+113,4,0
+114,4,0
+115,6,0
+116,4,0
+117,3,0
+118,6,0
+119,6,0
+120,6,0
+121,6,0
+122,6,0
+123,6,0
+177,4,0
+178,6,0
+179,6,0
+180,6,0
+182,4,0
+TR01,4,4
+TR02,3,3
+TR03,4,3
+TR04,4,3
+TR05,4,3
+TR06,2,2
+TR07,4,4
+TR08,3,5
+TR09,2,2
+TR10,4,4
+PD01,0,4
+PD02,4,1
+PD03,4,3
+PD04,0,4
+PD05,2,1
+PD06,4,1
+PD07,3,1
+PD08,3,3
+PD09,4,3
+PD10,4,3
+PD11,2,2
+PD12,4,1
+PD13,4,3
+PD14,0,5
+PD15,2,3
+NG01,4,3
+NG02,4,3
+NG03,4,0
+NG04,4,3
+NG05,2,3
+NG06,4,2
+NG07,4,1
+NG08,3,1
+NG09,4,3
+OL01,4,3
+OL02,2,1
+KD01,2,2
+KD02,0,5
+KD03,1,3
+KD04,4,1
+KD05,0,4
+KD06,2,3
+KD07,4,3
+KD08,2,3
+KD09,2,3
+KD10,4,0
+KO01,3,2
+KR01,2,3
+BL01,0,5
+BL02,4,1
+BL03,0,4
+BL04,0,6
+BL05,4,3
+BL06,3,1
+BL07,4,3
+BL08,0,4
+BL09,4,2
+BL10,2,3
+BL11,1,3
+BL12,4,1
+BL13,2,3
+BL14,4,0
+BL15,4,1
+BL16,0,4
+BL17,4,3
+PR01,2,1
+PR02,2,3
+PR03,2,3
+PR04,1,2
+PR05,4,3
+PR06,4,3
+PR07,0,5
+PR08,0,6
+PR09,4,1
+PR10,4,3
+PR11,4,4
+PR12,0,3
+PR13,3,3
+BI01,0,3
+BI02,4,0
+BI03,3,0
+BE01,1,5
+BE02,1,3
+GA01,0,6
+GA02,0,5
+GA03,2,3
+NV01,0,6
+NV02,0,6
+NV03,2,3
+NV04,1,3
+NV05,2,3
+LJ01,0,0
+LJ02,0,0
+LJ03,0,0
+SR01,4,1
+SR02,4,3
+SR03,4,2
+SR04,4,4
+SR05,4,3
+SR06,4,3
+SR07,4,3
+SR08,4,6
+SR09,4,3
+CE01,0,4
+CE02,2,6
+CE03,1,6
+CE04,0,4
+CE05,2,3
+CE06,0,5
+GD01,0,0
+GD02,3,2
+GD03,2,4
+GD04,4,3
+GD05,4,3
+GD06,4,3
+GD07,4,1
+GD08,4,3
+GD09,4,3
+GD10,4,3
+GD11,4,6
+GD12,2,3
+GD13,2,3
+GD14,4,3
+GD15,2,3
+GD17,4,3
+LA01,4,3
+LA02,4,1
+LA03,2,3
+LA04,2,3
+LA05,2,3
+LA06,2,3
+LA07,0,7
+LA08,2,4
+LA09,4,4
+LA10,2,5
+BR01,4,3
+BR02,2,3
+BR03,4,3
+BR04,4,3
+DE03,2,0
+DE04,3,1
+DE05,4,3
+DE06,4,3
+DE07,4,3
+DE08,4,3
+DE09,4,3
+DE10,2,3
+DE11,4,1
+KV01,4,6
+KV02,4,6
+KV03,0,4
+TE01,0,3
+TE03,4,2
+TE05,4,6
+TE06,4,3
+ST01,3,3
+ST02,2,2
+DO01,4,3
+DO03,4,1
+DO04,4,0
+DO06,4,3
+DO07,4,3
+SA02,4,3
+SA03,4,1
+SA05,4,1
+ZV01,2,7
+ZV07,0,9
+VL01,4,4
+VL02,1,9
+MI01,4,3
+MI02,0,7
+MI03,2,4
+SC01,1,9
+SC02,2,5
+SC03,4,3
+SC04,2,5
+SC05,1,6
+SC06,2,4
+BC05,4,3
+SE01,2,9
+SE02,0,4
+GO01,0,0
+CA01,1,5
+CA02,2,6
+VG01,0,9
+VG02,2,9
+VG03,4,7
+VG04,2,9
+VG05,2,9
+VG06,2,9
+RO03,0,9
+RO04,0,9
+HP01,2,8
+SO02,0,0
+RU01,3,9
+RU02,4,8
+RU03,4,6
+RU04,2,0
+MO01,4,1
+MO02,4,3
+MO03,2,2
+MO04,2,3
+MO05,4,3
+VU01,3,2
+PE01,4,3
+PE02,4,3
+PE03,4,3`;
+
+            const firebaseConfig = {
+                apiKey: "AIzaSyCiu6siFd6lfzD0JtQLnWkOE7mMb0NMGZA",
+                authDomain: "planseta-ce461.firebaseapp.com",
+                databaseURL: "https://planseta-ce461-default-rtdb.europe-west1.firebasedatabase.app",
+                projectId: "planseta-ce461",
+                storageBucket: "planseta-ce461.firebasestorage.app",
+                messagingSenderId: "1050533199438",
+                appId: "1:1050533199438:web:2806d191af87b4a9558d1f",
+                measurementId: "G-SJPZ2SRCJ8"
+            };
+
+            let firebaseApp, firebaseDb, firebaseInitialized = false;
+            try {
+                firebaseApp = firebase.initializeApp(firebaseConfig);
+                firebaseDb = firebase.database();
+                firebaseInitialized = true;
+                document.getElementById('firebaseStatusBtn').className = 'firebase-on';
+            } catch (e) {
+                console.error('Firebase init greška:', e);
+            }
+
+            const auth = firebase.auth ? firebase.auth() : null;
+            let currentUser = null;
+
+            const map = L.map('map').setView([44.4, 17.5], 8);
+            const tileUrl = 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png';
+            const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19, attribution: '© OpenStreetMap France' }).addTo(map);
+            let mapVisible = true;
+            document.getElementById('toggleMapBtn').addEventListener('click', function() {
+                if (mapVisible) { map.removeLayer(tileLayer); mapVisible = false; this.className = 'map-off'; }
+                else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; }
+            });
+
+            const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
+            const hoverTooltip = document.getElementById('hoverTooltip');
+            const statusDiv = document.getElementById('status');
+            const tableWrapper = document.getElementById('tableWrapper');
+            const tableOverlay = document.getElementById('tableOverlay');
+
+            // ================================================================
+            // 🌐 GEOGRAFSKA MREŽA – CRNE LINIJE (meridijani 15', paralele 10')
+            // Poravnato sa kvadratima mreže: 16°00'–20°00' E, 42°30'–45°20' N
+            // ================================================================
+            const graticuleLayer = L.layerGroup().addTo(map);
+            let graticuleVisible = true;
+
+            function formatLonG(deg) {
+                const d = Math.floor(deg);
+                const m = Math.round((deg - d) * 60);
+                return `${d}°${String(m).padStart(2, '0')}'E`;
+            }
+            function formatLatG(deg) {
+                const d = Math.floor(deg);
+                const m = Math.round((deg - d) * 60);
+                return `${d}°${String(m).padStart(2, '0')}'N`;
+            }
+
+            (function buildGraticule() {
+                const LON_START = 16.0, LON_END = 20.0, LON_STEP = 15/60;
+                const LAT_START = 42 + 30/60, LAT_END = 45 + 20/60, LAT_STEP = 10/60;
+
+                // TANKE CRNE linije – da se ne vide duplo ispod debljih ivica kvadrata
+                const lineStyle = {
+                    color: '#000000',
+                    weight: 1,
+                    opacity: 0.7,
+                    interactive: false
+                };
+                const mainLineStyle = {
+                    color: '#000000',
+                    weight: 1.5,
+                    opacity: 0.9,
+                    interactive: false
+                };
+
+                const nLon = Math.round((LON_END - LON_START) / LON_STEP);
+                const nLat = Math.round((LAT_END - LAT_START) / LAT_STEP);
+
+                // Meridijani
+                for (let i = 0; i <= nLon; i++) {
+                    const lon = Math.round((LON_START + i * LON_STEP) * 10000) / 10000;
+                    const isMain = Math.abs(lon - Math.round(lon)) < 0.001;
+                    graticuleLayer.addLayer(L.polyline(
+                        [[LAT_START, lon], [LAT_END, lon]],
+                        isMain ? mainLineStyle : lineStyle
+                    ));
+                    graticuleLayer.addLayer(L.marker([LAT_END, lon], {
+                        icon: L.divIcon({
+                            className: 'graticule-label',
+                            html: formatLonG(lon),
+                            iconSize: [50, 14],
+                            iconAnchor: [25, 7]
+                        }),
+                        interactive: false
+                    }));
+                }
+
+                // Paralele
+                for (let i = 0; i <= nLat; i++) {
+                    const lat = Math.round((LAT_START + i * LAT_STEP) * 10000) / 10000;
+                    const isMain = Math.abs(lat - Math.round(lat)) < 0.001;
+                    graticuleLayer.addLayer(L.polyline(
+                        [[lat, LON_START], [lat, LON_END]],
+                        isMain ? mainLineStyle : lineStyle
+                    ));
+                    graticuleLayer.addLayer(L.marker([lat, LON_START], {
+                        icon: L.divIcon({
+                            className: 'graticule-label',
+                            html: formatLatG(lat),
+                            iconSize: [50, 14],
+                            iconAnchor: [50, 7]
+                        }),
+                        interactive: false
+                    }));
+                }
+            })();
+
+            document.getElementById('gratToggleBtn').addEventListener('click', function() {
+                if (graticuleVisible) {
+                    map.removeLayer(graticuleLayer);
+                    graticuleVisible = false;
+                    this.className = 'grat-off';
+                    this.title = 'Prikaži geografsku mrežu';
+                } else {
+                    map.addLayer(graticuleLayer);
+                    graticuleVisible = true;
+                    this.className = 'grat-on';
+                    this.title = 'Sakrij geografsku mrežu';
+                }
+            });
+
+            // ================================================================
+            // 📦 POMOĆNE FUNKCIJE
+            // ================================================================
+            const KM_PER_DEG_LAT = 111.32;
+            function destination(lat, lon, bearingDeg, distanceKm) {
+                const br = bearingDeg * Math.PI / 180;
+                const dLat = distanceKm * Math.cos(br) / KM_PER_DEG_LAT;
+                const dLon = distanceKm * Math.sin(br) / (KM_PER_DEG_LAT * Math.cos(lat * Math.PI / 180));
+                return [lat + dLat, lon + dLon];
+            }
+            function generateSectorCoords(lat, lon, outerKm, innerKm, startDeg, endDeg, steps = 36) {
+                let start = parseFloat(startDeg), end = parseFloat(endDeg);
+                if (isNaN(start) || isNaN(end)) return null;
+                if (end < start) end += 360;
+                const coords = [];
+                for (let i = 0; i <= steps; i++) {
+                    const a = start + (end - start) * i / steps;
+                    coords.push(destination(lat, lon, a, outerKm));
+                }
+                coords.push(destination(lat, lon, end, innerKm));
+                for (let i = steps; i >= 0; i--) {
+                    const a = start + (end - start) * i / steps;
+                    coords.push(destination(lat, lon, a, innerKm));
+                }
+                coords.push(destination(lat, lon, start, outerKm));
+                return coords;
+            }
+            function bearing(lat1, lon1, lat2, lon2) {
+                const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+                const y = Math.sin(Δλ) * Math.cos(φ2);
+                const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                const θ = Math.atan2(y, x);
+                return (θ * 180 / Math.PI + 360) % 360;
+            }
+            function haversine(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+                const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c;
+            }
+            function pointInPolygon(lat, lon, polygon) {
+                let coords = polygon;
+                if (typeof polygon.getLatLngs === 'function') {
+                    const rings = polygon.getLatLngs();
+                    if (rings.length === 0) return false;
+                    coords = rings[0];
+                }
+                if (!Array.isArray(coords) || coords.length === 0) return false;
+                let inside = false;
+                const n = coords.length;
+                for (let i = 0, j = n - 1; i < n; j = i++) {
+                    const xi = coords[i].lat, yi = coords[i].lng;
+                    const xj = coords[j].lat, yj = coords[j].lng;
+                    const intersect = ((yi > lon) !== (yj > lon)) &&
+                        (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            }
+            function formatTimeHHMMSS(date) {
+                if (!date || isNaN(date.getTime())) return '-';
+                return String(date.getHours()).padStart(2, '0') + ':' +
+                       String(date.getMinutes()).padStart(2, '0') + ':' +
+                       String(date.getSeconds()).padStart(2, '0');
+            }
+
+            // ================================================================
+            // 🔐 LOGIN
+            // ================================================================
+            const loginOverlay = document.getElementById('loginOverlay');
+            const loginEmail = document.getElementById('loginEmail');
+            const loginPassword = document.getElementById('loginPassword');
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
+            const showRegisterLink = document.getElementById('showRegisterLink');
+            const showLoginLink = document.getElementById('showLoginLink');
+            const registerForm = document.getElementById('registerForm');
+            const regEmail = document.getElementById('regEmail');
+            const regPassword = document.getElementById('regPassword');
+            const registerBtn = document.getElementById('registerBtn');
+
+            if (auth) {
+                loginBtn.addEventListener('click', () => {
+                    const email = loginEmail.value.trim();
+                    const pass = loginPassword.value.trim();
+                    if (!email || !pass) {
+                        loginError.textContent = '✏️ Unesi email i lozinku.';
+                        loginError.style.display = 'block';
+                        return;
+                    }
+                    loginError.style.display = 'none';
+                    auth.signInWithEmailAndPassword(email, pass)
+                        .catch(err => {
+                            loginError.textContent = '❌ ' + err.message;
+                            loginError.style.display = 'block';
+                        });
+                });
+                registerBtn.addEventListener('click', () => {
+                    const email = regEmail.value.trim();
+                    const pass = regPassword.value.trim();
+                    if (!email || !pass || pass.length < 6) {
+                        alert('Unesi ispravan email i lozinku (min 6 karaktera).');
+                        return;
+                    }
+                    auth.createUserWithEmailAndPassword(email, pass)
+                        .then(() => {
+                            alert('✅ Nalog kreiran!');
+                            registerForm.style.display = 'none';
+                            showRegisterLink.style.display = 'inline';
+                        })
+                        .catch(err => alert('❌ ' + err.message));
+                });
+                showRegisterLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    registerForm.style.display = 'block';
+                    showRegisterLink.style.display = 'none';
+                });
+                showLoginLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    registerForm.style.display = 'none';
+                    showRegisterLink.style.display = 'inline';
+                });
+            } else {
+                loginOverlay.style.display = 'none';
+            }
+
+            // ================================================================
+            // 📍 GLOBALNE VARIJABLE
+            // ================================================================
+            let bPoints = [];
+            let bLayer = L.layerGroup().addTo(map);
+            let bCounter = 0;
+            let deleteMode = false;
+            let activeA = null, activeAKey = null, filterByA = false;
+            let sectorsByA = {}, allSectors = [], sectorsVisible = true;
+            let greenCells = [], blueCells = [], redCells = [];
+            let gridCells = [], selectedGridColor = null;
+            let pngOverlay = null, pngVisible = false;
+            let pngImgWidth = null, pngImgHeight = null;
+            let hoveringBRow = null, lastMouseLatLng = null;
+            let selectedPP8 = 0, selectedPP8X = 0, selectedTD6B = 0, selectedTD6BX = 0;
+            let markerData = [];
+            let addedCoords = {};
+            let totalSectors = 0;
+            let bPointsRef = null, gridColorsRef = null, activeARef = null;
+            let bPointsListener = null, gridColorsListener = null;
+            let confirmationsListener = null;
+            let rocketStock = {};
+
+            let currentKmzName = null, currentKmzModified = null, currentKmzSize = null;
+            const PNG_BOUNDS = [
+                [41.46974424083233, 15.46096394958954],
+                [45.96991870077077, 21.66292597350616]
+            ];
+
+            // Cijeli CSV podaci (isti kao u originalu)
+            const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
+NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501
+1,45.197576,17.002114,42000,1,305,105,,,,,,,305,105,,,,,,,4,8,2.25,4.5,90501
+4,45.102000,17.036111,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90501
+13,45.061523,17.204731,42000,1,285,75,95,115,155,165,,,285,75,95,115,155,165,,,4,8,2.25,4.5,90501
+17,45.056085,16.997707,42000,291,45,105,,,,,,,45,105,,,,,,,4,8,2.25,4.5,90501
+19,45.000442,16.895683,42000,1,25,65,,,,,,,25,65,,,,,,,4,8,2.25,4.5,90505
+24,45.022078,17.103973,42000,285,85,225,305,315,,,,,85,225,305,315,,,,,4,8,2.25,4.5,90501
+36,45.021984,18.474102,42000,128,155,175,215,235,275,65,,,,,,,,,,,4,8,2.25,4.5,90512
+37,44.95318,18.425745,42000,135.1,315,355,265,285,,,,,315,355,265,285,,,,,4,8,2.25,4.5,90512
+39,44.9484,18.571268,42000,139.7,5,65,,,,,,,5,65,,,,,,,4,8,2.25,4.5,90512
+41,44.89454,18.068678,42000,289.8,95,115,,,,,,,95,115,,,,,,,4,8,2.25,4.5,90509
+95,44.97778,18.636152,42000,1,185,265,345,75,,,,,185,265,345,75,,,,,4,8,2.25,4.5,90513
+96,44.936504,18.642622,42000,141.8,355,35,,,,,,,355,35,,,,,,,4,8,2.25,4.5,90513
+97,44.893814,18.585032,42000,167.1,45,75,,,,,,,45,75,,,,,,,4,8,2.25,4.5,90514
+98,44.845715,18.552818,42000,169.9,45,85,125,165,285,305,,,45,85,125,165,285,305,,,4,8,2.25,4.5,90514
+99,44.927594,18.532273,42000,1,295,335,,,,,,,295,335,,,,,,,4,8,2.25,4.5,90514
+130,44.92511,18.697338,42000,99.2,315,145,,,,,,,315,145,,,,,,,4,8,2.25,4.5,90515
+131,44.879578,18.692314,42000,119.1,255,325,35,115,,,,,255,325,35,115,,,,,4,8,2.25,4.5,90515
+132,44.828472,18.659004,42000,123.9,55,95,105,205,,,,,55,95,105,205,,,,,4,8,2.25,4.5,90515
+133,44.804398,18.57171,42000,155.4,165,225,345,15,,,,,165,225,345,15,,,,,4,8,2.25,4.5,90515
+134,44.890068,18.749847,42000,113.3,355,185,,,,,,,355,185,,,,,,,4,8,2.25,4.5,90515
+135,44.828205,18.735760,42000,134.1,235,355,15,75,205,225,175,195,235,355,15,75,205,225,,,4,8,2.25,4.5,90515
+136,44.784958,18.737307,42000,1,105,135,255,285,,,,,105,135,255,285,,,,,4,8,2.25,4.5,90515
+137,44.781956,18.663582,42000,198.9,65,215,,,,,,,65,215,,,,,,,4,8,2.25,4.5,90515
+145,44.862095,17.83947,42000,270.8,175,205,,,,,,,175,205,,,,,,,4,8,2.25,4.5,90508
+146,44.840717,17.928776,42000,191,335,355,,,,,,,335,355,,,,,,,4,8,2.25,4.5,90508
+147,44.912952,18.401289,42000,137.8,105,175,,,,,,,105,175,,,,,,,4,8,2.25,4.5,90511
+148,44.864983,18.378574,42000,304.7,45,85,,,,,,,45,85,,,,,,,4,8,2.25,4.5,90511
+149,44.863316,18.453932,42000,279,275,335,,,,,,,275,335,,,,,,,4,8,2.25,4.5,90511
+150,44.812317,18.487831,42000,250.7,65,165,175,235,,,,,65,165,175,235,,,,,4,8,2.25,4.5,90511
+151,44.81629,18.439781,42000,279.2,275,325,335,375,35,145,,,275,325,335,375,35,145,,,4,8,2.25,4.5,90511
+152,44.82171,18.35226,42000,357.2,85,95,,,,,,,85,95,,,,,,,4,8,2.25,4.5,90511
+153,44.798725,17.860455,42000,260.3,215,235,,,,,,,215,235,,,,,,,4,8,2.25,4.5,90526
+154,44.745056,17.813056,42000,1,285,315,45,85,,,,,285,315,45,85,,,,,4,8,2.25,4.5,90526
+156,44.767633,17.922519,42000,1,95,125,255,265,,,,,95,125,255,265,,,,,4,8,2.25,4.5,90509
+159,44.662472,18.128694,42000,1,325,345,,,,,,,325,345,,,,,,,4,8,2.25,4.5,90509
+183,44.57194,19.062815,42000,373,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90517
+184,44.566956,19.133589,42000,335.9,55,175,,,,,,,55,175,,,,,,,4,8,2.25,4.5,90517
+186,44.480186,19.025019,42000,361,55,135,305,325,,,,,55,135,305,325,,,,,4,8,2.25,4.5,90517
+187,44.465584,19.091494,42000,310.5,5,185,,,,,,,5,185,,,,,,,4,8,2.25,4.5,90517
+188,44.43831,19.035934,42000,415.2,95,145,,,,,,,95,145,,,,,,,4,8,2.25,4.5,90517
+189,44.396797,19.081415,42000,271.3,35,135,285,325,,,,,35,135,285,325,,,,,4,8,2.25,4.5,90517
+190,44.373802,19.019811,42000,490.3,55,105,275,315,,,,,55,105,275,315,,,,,4,8,2.25,4.5,90517
+191,44.335954,18.987238,42000,414.5,95,125,,,,,,,95,125,,,,,,,4,8,2.25,4.5,90517
+193,44.999653,18.070015,42000,209,145,165,255,265,335,025,,,,,,,,,,,4,8,2.25,4.5,90508
+196,44.880894,17.965502,42000,299.2,75,195,205,225,295,325,,,75,195,205,225,295,325,,,4,8,2.25,4.5,90508
+198,44.602775,18.399942,42000,1,45,185,305,35,,,,,45,185,305,35,,,,,4,8,2.25,4.5,90520
+199,44.64202,18.313943,42000,1,45,105,335,5,,,,,45,105,335,5,,,,,4,8,2.25,4.5,90520
+200,44.75183,18.902086,42000,151.5,235,255,125,145,,,,,235,255,125,145,,,,,4,8,2.25,4.5,90525
+202,44.649765,18.819029,42000,341.8,75,155,355,5,,,,,75,155,355,5,,,,,4,8,2.25,4.5,90525
+203,44.620027,18.883350,42000,1,5,45,155,255,275,305,,,5,45,155,255,275,305,,,4,8,2.25,4.5,90525
+205,44.7036,18.938698,42000,240,95,135,335,355,,,,,95,135,335,355,,,,,4,8,2.25,4.5,90524
+206,44.64332,18.956656,42000,380.7,5,45,,,,,,,5,45,,,,,,,4,8,2.25,4.5,90524
+207,44.62716,19.038095,42000,385.2,75,95,205,255,305,355,,,,,,,,,,,4,8,2.25,4.5,90524
+208,44.769951,18.455441,42000,1,95,135,145,185,295,315,335,45,95,135,145,185,295,315,335,45,4,8,2.25,4.5,90511
+209,44.898728,18.523579,42000,1,245,285,305,35,,,,,245,285,305,35,,,,,4,8,2.25,4.5,90511
+211,44.7775,18.601273,42000,379.1,285,315,155,175,,,,,285,315,155,175,,,,,4,8,2.25,4.5,90515
+212,44.829426,18.814176,42000,1,305,75,,,,,,,305,75,,,,,,,4,8,2.25,4.5,90515
+213,44.77032,18.803582,42000,1,335,25,155,175,,,,,335,25,155,175,,,,,4,8,2.25,4.5,90515
+214,44.837016,18.959652,42000,1,275,65,,,,,,,275,65,,,,,,,4,8,2.25,4.5,90515
+215,44.808658,18.89075,42000,1,325,65,,,,,,,325,65,,,,,,,4,8,2.25,4.5,90515
+216,44.856037,18.614680,42000,1,55,115,,,,,,,,,,,,,,,4,8,2.25,4.5,90515
+219,44.103806,19.125870,42000,1,175,275,325,345,,,,,,,,,,,,,4,8,2.25,4.5,90533
+221,44.168507,19.216888,42000,1,75,85,,,,,,,75,85,,,,,,,4,8,2.25,4.5,90522
+223,44.128722,19.325,42000,1,355,15,205,225,,,,,355,15,205,225,,,,,4,8,2.25,4.5,90522
+229,44.018417,19.573583,42000,1,355,205,,,,,,,355,205,,,,,,,4,8,2.25,4.5,90522
+234,44.498352,17.087317,42000,1,55,95,170,190,,,,,,,,,,,,,4,8,2.25,4.5,90532
+235,44.453751,16.945665,42000,1,100,120,265,355,,,,,,,,,,,,,4,8,2.25,4.5,90532
+236,44.432331,17.062187,42000,1,105,195,235,255,265,285,,,,,,,,,,,4,8,2.25,4.5,90532
+237,44.439754,17.142784,42000,1,80,130,225,260,,,,,,,,,,,,,4,8,2.25,4.5,90532
+238,44.413750,16.988605,42000,1,130,225,,,,,,,,,,,,,,,4,8,2.25,4.5,90532
+239,44.327633,16.952002,42000,1,230,255,,,,,,,,,,,,,,,4,8,2.25,4.5,90532
+241,44.325619,17.043184,42000,1,135,155,285,45,,,,,,,,,,,,,4,8,2.25,4.5,90534
+242,44.270073,17.117308,42000,1,255,5,,,,,,,,,,,,,,,4,8,2.25,4.5,90534
+243,44.232510,17.090908,42000,1,205,305,345,15,,,,,,,,,,,,,4,8,2.25,4.5,90534
+244,44.187065,17.194645,42000,1,285,15,195,225,,,,,,,,,,,,,4,8,2.25,4.5,90534
+245,44.612988,17.258018,42000,1,345,25,75,95,275,305,,,,,,,,,,,4,8,2.25,4.5,90535
+246,44.554314,17.321270,42000,1,15,35,145,155,,,,,,,,,,,,,4,8,2.25,4.5,90535
+247,44.463932,17.350882,42000,1,15,55,185,195,,,,,,,,,,,,,4,8,2.25,4.5,90535
+248,44.462284,17.422861,42000,1,225,265,295,315,,,,,,,,,,,,,4,8,2.25,4.5,90535
+249,44.408218,17.463243,42000,1,165,195,225,265,, ,,,,,,,,,,,4,8,2.25,4.5,90535
+270,44.701832,18.392893,42000,1,35,95,165,205,245,285,,,,,,,,,,,4,8,2.25,4.5,90537
+271,44.746689,18.449495,42000,1,55,155,345,355,,,,,,,,,,,,,4,8,2.25,4.5,90537
+272,44.754391,18.527164,42000,1,105,115,175,285,,,,,,,,,,,,,4,8,2.25,4.5,90537
+273,44.704777,18.551844,42000,1,155,185,235,285,,,,,,,,,,,,,4,8,2.25,4.5,90537
+274,44.651035,18.484066,42000,1,355,75,95,115,125,195,235,265,,,,,,,,,4,8,2.25,4.5,90537
+275,44.653923,18.575361,42000,1,135,265,275,285,295,315,,,,,,,,,,,4,8,2.25,4.5,90537
+276,44.681728,18.674854,42000,1,45,75,95,115,,,,,,,,,,,,,4,8,2.25,4.5,90536
+277,44.737751,18.713470,42000,1,35,65,75,125,305,355,,,,,,,,,,,4,8,2.25,4.5,90536
+278,44.726978,18.810772,42000,1,325,205,265,275,,,,,,,,,,,,,4,8,2.25,4.5,90536
+279,44.643009,18.452751,42000,1,15,65,85,105,155,215,225,305,,,,,,,,,4,8,2.25,4.5,90538
+280,44.585461,18.467285,42000,1,35,75,95,215,245,315,,,,,,,,,,,4,8,2.25,4.5,90538
+281,44.560226,18.544107,42000,1,25,305,,,,,,,,,,,,,,,4,8,2.25,4.5,90538
+282,44.560589,18.337427,42000,1,355,45,155,185,,,,,,,,,,,,,4,8,2.25,4.5,90538
+283,44.536621,18.428737,42000,1,25,145,185,205,345,355,,,,,,,,,,,4,8,2.25,4.5,90538
+284,44.495480,18.439415,42000,1,5,75,105,135,165,175,,,,,,,,,,,4,8,2.25,4.5,90538
+285,44.595783,18.992931,42000,1,245,285,295,325,345,5,,,,,,,,,,,4,8,2.25,4.5,90711
+286,44.528664,18.966391,42000,1,355,25,115,155,,,,,,,,,,,,,4,8,2.25,4.5,90710
+287,44.469807,18.977842,42000,1,25,95,205,265,,,,,,,,,,,,,4,8,2.25,4.5,90710
+288,44.478596,18.777863,42000,1,35,55,75,145,205,275,305,355,,,,,,,,,4,8,2.25,4.5,90709
+289,44.445633,18.776543,42000,1,245,115,,,,,,,,,,,,,,,4,8,2.25,4.5,90709
+290,44.474499,18.824846,42000,1,105,345,,,,,,,,,,,,,,,4,8,2.25,4.5,90709
+291,44.502980,18.866087,42000,1,145,315,,,,,,,,,,,,,,,4,8,2.25,4.5,90709
+292,44.426319,18.871492,42000,1,285,95,,,,,,,,,,,,,,,4,8,2.25,4.5,90709
+293,44.464090,18.911295,42000,1,45,75,175,295,,,,,,,,,,,,,4,8,2.25,4.5,90709
+BOR,44.583271,17.606093,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+JAH,43.720148,18.561821,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+BNX,44.941845,17.297423,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+TZL,44.459273,18.722256,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+DBV,42.561441,18.263685,52000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90000
+100,44.772365,18.978431,42000,1,165,215,15,55,,,,,165,215,15,55,,,,,4,8,2.25,4.5,90516
+101,44.809494,19.005292,42000,1,295,45,,,,,,,295,45,,,,,,,4,8,2.25,4.5,90516
+102,44.827981,19.070394,42000,1,55,75,255,25,155,225,,,55,75,255,25,155,225,,,4,8,2.25,4.5,90516
+103,44.802146,19.130123,42000,1,85,155,,,,,,,85,155,,,,,,,4,8,2.25,4.5,90516
+104,44.856121,19.123883,42000,1,265,25,85,205,,,,,265,25,85,205,,,,,4,8,2.25,4.5,90516
+105,44.861291,19.19679,42000,1,275,35,155,195,,,,,275,35,155,195,,,,,4,8,2.25,4.5,90516
+106,44.874046,19.272198,42000,1,305,75,125,235,,,,,305,75,125,235,,,,,4,8,2.25,4.5,90516
+107,44.859133,19.322402,42000,1,315,175,215,225,,,,,315,175,215,225,,,,,4,8,2.25,4.5,90516
+108,44.73564,19.018054,42000,1,155,235,,,,,,,155,235,,,,,,,4,8,2.25,4.5,90516
+109,44.772524,19.070068,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90516
+110,44.8261,19.217533,42000,1,25,55,165,205,255,285,305,355,25,55,165,205,255,285,305,355,4,8,2.25,4.5,90516
+111,44.814421,19.282611,42000,1,205,265,45,145,,,,,205,265,45,145,,,,,4,8,2.25,4.5,90516
+112,44.776527,19.181436,42000,1,55,205,,,,,,,55,205,,,,,,,4,8,2.25,4.5,90516
+113,44.613955,19.136430,42000,260.8,65,155,265,275,,,,,65,155,265,275,,,,,4,8,2.25,4.5,90516
+114,44.732534,19.131954,42000,1,35,85,,,,,,,35,85,,,,,,,4,8,2.25,4.5,90516
+115,44.686417,19.266691,42000,168.9,205,235,315,345,35,195,,,205,235,315,345,35,195,,,4,8,2.25,4.5,90516
+116,44.641083,19.153967,42000,200.7,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90516
+117,44.764867,19.27461,42000,1,35,195,235,295,,,,,35,175,235,295,,,,,4,8,2.25,4.5,90516
+118,44.736516,19.319835,42000,1,265,305,15,205,,,,,265,305,15,205,,,,,4,8,2.25,4.5,90516
+119,44.731201,19.247542,42000,1,235,355,55,155,,,,,235,355,55,155,,,,,4,8,2.25,4.5,90516
+120,44.70898,19.189398,42000,1,355,45,,,,,,,355,45,,,,,,,4,8,2.25,4.5,90516
+121,44.699717,19.082018,42000,1,105,145,45,75,,,,,105,145,45,75,,,,,4,8,2.25,4.5,90516
+122,44.676836,19.15275,42000,1,5,55,85,115,,,,,5,55,85,115,,,,,4,8,2.25,4.5,90516
+123,44.64784,19.210196,42000,127.5,345,15,35,195,,,,,345,15,35,195,,,,,4,8,2.25,4.5,90516
+177,44.234562,19.140619,42000,1,275,315,355,65,,,,,275,315,355,65,,,,,4,8,2.25,4.5,90518
+178,44.218566,19.233353,42000,1,325,125,,,,,,,325,125,,,,,,,4,8,2.25,4.5,90518
+179,44.174133,19.305790,42000,1,5,105,,,,,,,5,105,,,,,,,4,8,2.25,4.5,90518
+180,44.141517,19.419267,42000,1,275,135,,,,,,,275,135,,,,,,,4,8,2.25,4.5,90518
+182,44.077557,19.519327,42000,1,265,125,,,,,,,265,125,,,,,,,4,8,2.25,4.5,90518
+TR01,42.645819,18.315475,42000,1,335,45,135,275,,,,,335,45,135,275,,,,,4,8,2.25,4.5,90527
+TR02,42.646724,18.402011,42000,1,165,245,305,355,,,,,165,245,305,355,,,,,4,8,2.25,4.5,90527
+TR03,42.692690,18.264750,42000,1,139,264,34,89,,,,,,,,,,,,,4,8,2.25,4.5,90527
+TR04,42.747565,18.423634,42000,1,220,255,20,104,,,,,220,255,20,104,,,,,4,8,2.25,4.5,90527
+TR05,42.7563562,18.2235155,42000,1,,,105,145,,,,,,,105,145,,,,,4,8,2.25,4.5,90527
+TR06,42.7643586,18.1407271,42000,1,175,260,,,,,,,175,260,,,,,,,4,8,2.25,4.5,90527
+TR07,42.774822,18.3442239,42000,1,148,218,,,,,,,148,218,,,,,,,4,8,2.25,4.5,90527
+TR08,42.822101,18.295335,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90527
+TR09,42.834314,18.098912,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90527
+TR10,42.8552629,18.0432358,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90527
+PD01,44.818501,16.909657,42000,362,37,51,65,105,144,163,341,6,65,105,144,163,,,,,4,8,2.25,4.5,90505
+PD02,44.839169,16.831924,42000,292,31,50,119,132,,,,,,,,,,,,,4,8,2.25,4.5,90505
+PD03,44.866993,16.737854,42000,1,100,150,263,289,328,363,,,100,150,263,289,,,,,4,8,2.25,4.5,90505
+PD04,44.871586,16.935297,42000,1,87,108,215,248,291,325,,,87,108,291,325,,,,,4,8,2.25,4.5,90505
+PD05,44.902359,16.866224,42000,1,87,140,185,205,331,357,,,87,108,185,205,,,,,4,8,2.25,4.5,90505
+PD06,44.908237,16.634165,42000,492,5,100,269,348,,,,,12,100,269,348,,,,,4,8,2.25,4.5,90505
+PD07,44.928238,16.712160,42000,1,315,83,,,,,,,315,83,,,,,,,4,8,2.25,4.5,90505
+PD08,44.933769,16.971363,42000,1,98,130,222,241,245,308,,,100,130,222,241,245,308,,,4,8,2.25,4.5,90505
+PD09,44.944832,16.575573,42000,1,30,116,135,150,,,,,77,116,135,150,,,,,4,8,2.25,4.5,90505
+PD10,44.960514,16.815432,42000,1,1,107,130,150,257,307,,,1,107,269,307,,,,,4,8,2.25,4.5,90505
+PD11,44.965511,16.891449,42000,1,44,79,123,144,220,305,,,,,,,,,,,4,8,2.25,4.5,90505
+PD12,45.000366,16.614502,42000,244,60,145,178,260,,,,,60,145,178,260,,,,,4,8,2.25,4.5,90505
+PD13,45.014469,16.710430,42000,1,114,270,,,,,,,114,270,,,,,,,4,8,2.25,4.5,90505
+PD14,45.022198,16.794815,42000,1,122,261,,,,,,,122,170,185,255,,,,,4,8,2.25,4.5,90505
+PD15,45.055958,16.633951,42000,407,23,37,120,175,204,225,248,263,23,37,145,170,204,225,,,4,8,2.25,4.5,90505
+NG01,44.934330,16.371929,42000,1,60,220,,,,,,,60,220,,,,,,,4,8,2.25,4.5,90529
+NG02,44.941883,16.268085,42000,1,218,261,276,305,310,78,,,276,305,310,349,351,78,,,4,8,2.25,4.5,90529
+NG03,44.951408,16.486834,42000,1,91,119,161,204,341,359,,,161,204,213,239,261,320,,,4,8,2.25,4.5,90529
+NG04,44.982941,16.298176,42000,1,82,103,243,282,299,74,,,299,74,82,103,261,282,,,4,8,2.25,4.5,90529
+NG05,44.992786,16.391773,42000,1,42,60,91,134,145,162,267,14,267,14,42,60,91,131,,,4,8,2.25,4.5,90529
+NG06,45.024334,16.500267,42000,1,87,107,272,316,,,,,52,89,276,312,,,,,4,8,2.25,4.5,90529
+NG07,45.071177,16.552149,42000,1,59,80,122,139,230,248,265,334,265,334,,,,,,,4,8,2.25,4.5,90529
+NG08,45.076473,16.454542,42000,1,115,130,164,182,219,21,,,224,8,164,188,,,,,4,8,2.25,4.5,90529
+NG09,45.128170,16.474417,42000,1,45,87,178,191,209,25,,,234,25,45,87,,,,,4,8,2.25,4.5,90529
+OL01,44.858551,16.661821,42000,1,5,35,66,127,149,271,318,348,66,127,149,271,,,,,4,8,2.25,4.5,90521
+OL02,44.886986,16.467924,42000,1,134,158,324,6,,,,,324,344,,,,,,,4,8,2.25,4.5,90521
+KD01,45.085717,16.958667,42000,1,100,130,186,215,,,,,186,215,,,,,,,4,8,2.25,4.5,90504
+KD02,45.097020,16.727776,42000,1,20,49,67,100,272,296,,,67,100,272,296,,,,,4,8,2.25,4.5,90504
+KD03,45.114846,16.809483,42000,1,258,272,324,22,,,,,348,17,,,,,,,4,8,2.25,4.5,90504
+KD04,45.119883,16.618717,42000,1,36,74,96,140,,,,,36,74,96,139,,,,,4,8,2.25,4.5,90504
+KD05,45.127442,16.891153,42000,1,296,342,,,,,,,,,,,,,,,4,8,2.25,4.5,90504
+KD06,45.159606,16.713081,42000,1,199,215,310,90,,,,,199,215,310,82,,,,,4,8,2.25,4.5,90504
+KD07,45.180714,16.780042,42000,1,190,130,,,,,,,190,130,,,,,,,4,8,2.25,4.5,90504
+KD08,45.194139,16.864000,42000,1,224,36,46,74,,,,,224,24,46,74,,,,,4,8,2.25,4.5,90504
+KD09,45.202972,16.650583,42000,1,273,109,175,200,,,,,283,109,175,200,,,,,4,8,2.25,4.5,90504
+KD10,45.219125,16.943017,42000,1,127,174,235,117,,,,,233,117,127,174,,,,,4,8,2.25,4.5,90504
+KO01,45.170452,16.558434,42000,344,238,80,,,,,,,252,27,,,,,,,4,8,2.25,4.5,90528
+KR01,44.879879,16.312523,42000,1,170,210,,,,,,,170,210,,,,,,,4,8,2.25,4.5,90530
+BL01,44.564018,17.168524,42000,1,30,65,,,,,,,30,65,,,,,,,4,8,2.25,4.5,90506
+BL02,44.589300,16.974050,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL03,44.632170,17.158150,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL04,44.661381,17.078274,42000,1,27,45,305,345,,,,,305,345,,,,,,,4,8,2.25,4.5,90506
+BL05,44.663290,16.937620,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL06,44.692665,17.158001,42000,1,349,98,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL07,44.723885,17.062384,42000,1,22,90,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL08,44.728697,16.971148,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL09,44.768612,17.125031,42000,1,338,158,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL10,44.762665,16.903946,42000,1,25,53,201,234,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL11,44.774417,17.026917,42000,1,67,117,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL12,44.775810,16.803154,42000,1,238,278,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL13,44.819889,17.163667,42000,1,336,224,,,,,,,336,224,,,,,,,4,8,2.25,4.5,90506
+BL14,44.838556,16.994556,42000,1,302,312,,,,,,,,,,,,,,,4,8,2.25,4.5,90506
+BL15,44.856694,17.070333,42000,1,81,155,,,,,,,71,155,348,9,,,,,4,8,2.25,4.5,90506
+BL16,44.912090,17.115660,42000,1,,,,,,,,,130,165,256,284,,,,,4,8,2.25,4.5,90506
+BL17,44.911602,17.040661,42000,1,,,,,,,,,70,114,180,234,,,,,4,8,2.25,4.5,90506
+PR01,44.740326,17.674053,42000,1,73,88,212,244,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR02,44.783733,17.568501,42000,1,170,199,,,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR03,44.799019,17.735512,42000,1,121,187,304,344,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR04,44.825691,17.477699,42000,1,122,179,276,349,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR05,44.841404,17.664286,42000,1,302,69,,,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR06,44.849537,17.585176,42000,1,308,15,41,98,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR07,44.864990,17.754492,42000,1,1,22,235,290,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR08,44.891068,17.501934,42000,1,93,130,185,231,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR09,44.897110,17.671173,42000,1,136,278,,,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR10,44.906574,17.603622,42000,1,118,164,223,283,313,360,,,,,,,,,,,4,8,2.25,4.5,90507
+PR11,44.926353,17.745235,42000,1,25,75,151,244,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR12,44.949284,17.678751,42000,1,163,233,334,358,,,,,,,,,,,,,4,8,2.25,4.5,90507
+PR13,44.983551,17.749130,42000,1,80,96,180,325,,,,,,,,,,,,,4,8,2.25,4.5,90507
+BI01,42.925040,18.434810,42000,1,30,198,202,220,,,,,,,,,,,,,4,8,2.25,4.5,90539
+BI02,42.977820,18.399380,42000,1,60,138,,,,,,,,,,,,,,,4,8,2.25,4.5,90539
+BI03,43.017030,18.292910,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90539
+BE01,43.075880,18.193840,42000,1,291,322,,,,,,,,,,,,,,,4,8,2.25,4.5,90544
+BE02,43.135938,18.104069,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90544
+GA01,43.079000,18.607550,42000,1,18,230,324,342,,,,,,,,,,,,,4,8,2.25,4.5,90541
+GA02,43.116830,18.525530,42000,1,63,109,146,188,340,29,,,,,,,,,,,4,8,2.25,4.5,90541
+GA03,43.181490,18.462440,42000,1,88,120,,,,,,,,,,,,,,,4,8,2.25,4.5,90541
+NV01,43.190150,18.199810,42000,1,307,331,,,,,,,,,,,,,,,4,8,2.25,4.5,90542
+NV02,43.193740,18.091460,42000,1,4,41,,,,,,,,,,,,,,,4,8,2.25,4.5,90542
+NV03,43.251510,18.175440,42000,1,72,85,243,303,,,,,,,,,,,,,4,8,2.25,4.5,90542
+NV04,43.283720,18.129320,42000,1,125,240,,,,,,,,,,,,,,,4,8,2.25,4.5,90542
+NV05,43.350560,18.107400,42000,1,76,185,,,,,,,,,,,,,,,4,8,2.25,4.5,90542
+LJ01,42.934460,18.129620,42000,1,280,310,,,,,,,,,,,,,,,4,8,2.25,4.5,90540
+LJ02,42.972360,18.038110,42000,1,105,130,,,,,,,,,,,,,,,4,8,2.25,4.5,90540
+LJ03,42.999910,18.121900,42000,1,191,223,273,298,,,,,,,,,,,,,4,8,2.25,4.5,90540
+SR01,44.970524,17.504723,42000,1,107,169,,,,,,,110,160,,,,,,,4,8,2.25,4.5,90503
+SR02,44.975193,17.588924,42000,1,,,,,,,,,105,120,,,,,,,4,8,2.25,4.5,90503
+SR03,45.018353,17.666637,42000,1,310,017,,,,,,,310,12,175,195,280,290,,,4,8,2.25,4.5,90503
+SR04,45.022594,17.461199,42000,1,15,45,,,,,,,123,175,296,007,218,230,,,4,8,2.25,4.5,90503
+SR05,45.035185,17.583441,42000,1,359,40,260,332,,,,,359,40,260,332,,,,,4,8,2.25,4.5,90503
+SR06,45.068100,17.778340,42000,1,280,122,,,,,,,300,122,,,,,,,4,8,2.25,4.5,90503
+SR07,45.074368,17.521740,42000,1,317,30,127,143,206,288,,,317,47,127,143,206,288,,,4,8,2.25,4.5,90503
+SR08,45.103249,17.585030,42000,1,232,99,185,198,,,,,232,99,185,198,,,,,4,8,2.25,4.5,90503
+SR09,45.109104,17.469757,42000,1,291,139,,,,,,,291,139,,,,,,,4,8,2.25,4.5,90503
+CE01,44.657959,17.276033,42000,1,298,5,15,42,104,129,190,255,310,5,190,255,80,110,,,4,8,2.25,4.5,90531
+CE02,44.686123,17.365017,42000,1,160,210,285,345,,,,,160,210,285,345,,,,,4,8,2.25,4.5,90531
+CE03,44.726612,17.540718,42000,1,25,49,,,,,,,25,65,,,,,,,4,8,2.25,4.5,90531
+CE04,44.745319,17.302721,42000,1,118,170,268,329,,,,,80,170,235,320,,,,,4,8,2.25,4.5,90531
+CE05,44.747810,17.393021,42000,1,175,215,225,280,,,,,175,215,225,275,,,,,4,8,2.25,4.5,90531
+CE06,44.765900,17.474009,42000,1,115,145,250,275,,,,,115,145,250,275,,,,,4,8,2.25,4.5,90531
+GD01,44.999199,17.064537,42000,574,70,90,170,190,340,360,,,70,90,340,360,,,,,4,8,2.25,4.5,90501
+GD02,45.002205,17.382334,42000,1,189,236,,,,,,,20,45,186,260,280,310,,,4,8,2.25,4.5,90501
+GD03,45.010445,17.152796,42000,183,101,150,200,240,290,310,,,101,150,200,240,,,,,4,8,2.25,4.5,90501
+GD04,45.011868,17.228933,42000,1,22,93,116,162,336,349,,,43,93,136,162,336,349,,,4,8,2.25,4.5,90501
+GD05,45.032589,17.339035,42000,1,185,218,,,265,9,,,185,218,,,265,9,,,4,8,2.25,4.5,90501
+GD06,45.053717,17.397558,42000,1,330,10,,,,,,,258,283,,,,,,,4,8,2.25,4.5,90501
+GD07,45.054470,17.060213,42000,199,120,140,240,340,,,,,240,340,,,,,,,4,8,2.25,4.5,90501
+GD08,45.067917,17.141462,42000,1,6,61,128,140,168,182,250,270,22,115,167,182,291,307,,,4,8,2.25,4.5,90501
+GD09,45.102081,17.211794,42000,1,312,75,115,140,165,188,,,295,105,172,188,,,,,4,8,2.25,4.5,90501
+GD10,45.097931,17.303706,42000,1,294,69,166,189,,,,,10,60,144,208,286,355,,,4,8,2.25,4.5,90501
+GD11,45.118471,17.084126,42000,224,147,174,194,211,324,100,,,2,59,147,174,194,211,,,4,8,2.25,4.5,90501
+GD12,45.120710,17.376086,42000,1,312,96,272,300,,,,,308,90,223,280,,,,,4,8,2.25,4.5,90501
+GD13,45.119022,17.007961,42000,226,110,130,140,180,,,,,,,,,,,,,4,8,2.25,4.5,90501
+GD14,45.121918,17.172075,42000,152,148,166,221,245,309,124,,,319,132,147,163,221,245,,,4,8,2.25,4.5,90501
+GD15,45.169225,17.113403,42000,1,300,118,,,,,,,288,121,132,142,,,,,4,8,2.25,4.5,90501
+GD17,45.058430,17.269131,42000,1,334,7,80,140,,,,,350,60,80,150,,,,,4,8,2.25,4.5,90501
+LA01,44.792425,17.319894,42000,1,164,190,220,359,,,,,176,190,201,285,325,347,,,4,8,2.25,4.5,90502
+LA02,44.812311,17.389103,42000,1,196,218,274,289,299,323,,,196,218,274,289,299,323,,,4,8,2.25,4.5,90502
+LA03,44.839839,17.289981,42000,1,190,21,// Redni broj: gore = 11, dolje = 27 (17 redova)
+const redBroj = 27 - i;124,179,,,,,210,21,124,179,,,,,4,8,2.25,4.5,90502
+LA04,44.875922,17.421233,42000,1,106,159,254,313,,,,,81,159,280,310,,,,,4,8,2.25,4.5,90502
+LA05,44.898044,17.199706,42000,1,35,232,,,,,,,78,232,266,283,,,,,4,8,2.25,4.5,90502
+LA06,44.899706,17.333636,42000,1,191,204,215,340,,,,,113,129,215,340,,,,,4,8,2.25,4.5,90502
+LA07,44.924606,17.254825,42000,1,4,23,37,233,,,,,4,23,37,207,,,,,4,8,2.25,4.5,90502
+LA08,44.947825,17.192786,42000,1,76,204,,,,,,,73,92,,,,,,,4,8,2.25,4.5,90502
+LA09,44.953444,17.365042,42000,1,205,277,,,,,,,205,277,,,,,,,4,8,2.25,4.5,90502
+LA10,44.978328,17.301469,42000,1,357,17,130,198,211,235,,,1,17,130,198,211,235,,,4,8,2.25,4.5,90502
+BR01,45.009370,18.120650,42000,1,335,43,145,185,,,,,145,185,,,,,,,4,8,2.25,4.5,90506
+BR02,45.032150,17.930490,42000,1,277,30,85,120,151,234,,,277,5,85,120,151,234,,,4,8,2.25,4.5,90506
+BR03,45.101766,18.053480,42000,1,271,104,,,,,,,271,104,,,,,,,4,8,2.25,4.5,90506
+BR04,45.108841,17.972183,42000,1,227,104,,,,,,,227,104,,,,,,,4,8,2.25,4.5,90506
+DE03,44.905670,17.841300,42000,1,3,49,,,,,,,,,,,,,,,4,8,2.25,4.5,90542
+DE04,44.907436,17.934374,42000,1,325,15,,,,,,,328,4,,,,,,,4,8,2.25,4.5,90542
+DE05,44.909550,18.033630,42000,1,57,74,126,148,155,172,,,57,74,155,172,,,,,4,8,2.25,4.5,90542
+DE06,44.957416,17.904039,42000,1,260,130,,,,,,,260,130,,,,,,,4,8,2.25,4.5,90542
+DE07,44.962429,18.068115,42000,1,107,143,195,235,276,294,,,107,143,195,235,,,,,4,8,2.25,4.5,90542
+DE08,44.969597,17.837671,42000,1,32,98,351,19,,,,,32,109,,,,,,,4,8,2.25,4.5,90542
+DE09,44.986423,17.989603,42000,1,233,283,331,6,,,,,233,283,331,6,,,,,4,8,2.25,4.5,90542
+DE10,45.023940,18.027700,42000,1,223,256,287,314,,,,,223,243,,,,,,,4,8,2.25,4.5,90542
+DE11,45.030250,17.827350,42000,1,311,70,112,146,,,,,325,70,123,162,,,,,4,8,2.25,4.5,90542
+KV01,44.541230,17.523940,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90600
+KV02,44.571490,17.418850,42000,1,88,101,189,211,315,343,,,315,343,,,,,,,4,8,2.25,4.5,90600
+KV03,44.629020,17.337600,42000,1,345,39,57,135,,,,,57,135,,,,,,,4,8,2.25,4.5,90600
+TE01,44.568920,17.860150,42000,1,257,45,,,,,,,280,45,,,,,,,4,8,2.25,4.5,90601
+TE03,44.618180,17.676290,42000,1,65,197,,,,,,,65,197,,,,,,,4,8,2.25,4.5,90601
+TE05,44.678470,17.588840,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90601
+TE06,44.683073,17.686445,42000,1,18,31,41,53,78,93,149,199,78,93,,,,,,,4,8,2.25,4.5,90601
+ST01,44.704468,17.846439,42000,1,309,012,110,149,168,188,,,309,012,,,,,,,4,8,2.25,4.5,90526
+ST02,44.753173,17.755599,42000,1,76,99,321,354,,,,,76,99,321,354,,,,,4,8,2.25,4.5,90526
+DO01,44.629360,18.187060,42000,1,351,59,211,229,251,269,,,251,269,,,,,,,4,8,2.25,4.5,90509
+DO03,44.690260,18.185720,42000,1,341,95,211,329,,,,,341,99,296,329,,,,,4,8,2.25,4.5,90509
+DO04,44.737650,17.981070,42000,1,26,77,84,229,,,,,26,77,84,229,,,,,4,8,2.25,4.5,90509
+DO06,44.814315,18.120539,42000,1,142,158,180,240,,,,,137,153,188,275,,,,,4,8,2.25,4.5,90509
+DO07,44.840390,18.166650,42000,1,120,200,211,299,,,,,120,200,251,269,,,,,4,8,2.25,4.5,90509
+SA02,44.954418,18.429230,42000,1,161,199,251,281,292,337,,,161,199,305,337,,,,,4,8,2.25,4.5,90512
+SA03,44.981500,18.550830,42000,1,3,124,136,159,281,341,,,341,3,39,74,,,,,4,8,2.25,4.5,90512
+SA05,45.023781,18.416561,42000,1,329,99,213,240,248,280,,,15,99,245,283,,,,,4,8,2.25,4.5,90512
+ZV01,44.297650,19.091810,42000,1,356,105,155,187,,,,,4,69,155,177,,,,,4,8,2.25,4.5,90517
+ZV07,44.598036,19.105300,42000,1,85,168,,,,,,,85,150,,,,,,,4,8,2.25,4.5,90517
+VL01,44.243530,19.001660,42000,1,134,360,,,,,,,160,360,,,,,,,4,8,2.25,4.5,90700
+VL02,44.225784,18.918624,42000,1,137,175,316,338,,,,,137,175,,,,,,,4,8,2.25,4.5,90700
+MI01,44.129850,19.076370,42000,1,316,68,,,,,,,316,68,,,,,,,4,8,2.25,4.5,90533
+MI02,44.166060,19.145338,42000,1,252,348,,,,,,,252,337,,,,,,,4,8,2.25,4.5,90533
+MI03,44.211560,19.080970,42000,1,15,38,170,205,245,260,,,15,38,160,202,,,,,4,8,2.25,4.5,90533
+SC01,43.988885,19.507039,42000,1,66,259,,,,,,,66,245,,,,,,,4,8,2.25,4.5,90522
+SC02,44.019970,19.316040,42000,1,122,15,,,,,,,144,15,,,,,,,4,8,2.25,4.5,90522
+SC03,44.028540,19.424720,42000,1,21,61,138,216,,,,,181,198,,,,,,,4,8,2.25,4.5,90522
+SC04,44.055400,19.362890,42000,1,153,166,311,323,,,,,,,,,,,,,4,8,2.25,4.5,90522
+SC05,44.100168,19.177136,42000,1,70,120,306,318,,,,,92,120,,,,,,,4,8,2.25,4.5,90522
+SC06,44.109030,19.274330,42000,1,15,47,76,122,,,,,15,30,,76,122,,,,4,8,2.25,4.5,90522
+BC05,44.229700,19.325800,42000,1,250,196,,,,,,,250,196,,,,,,,4,8,2.25,4.5,90518
+SE01,44.236180,18.815180,42000,1,353,9,19,31,117,124,257,275,353,9,19,31,,,,,4,8,2.25,4.5,90701
+SE02,44.291240,18.916950,42000,1,265,288,,,,,,,268,288,,,,,,,4,8,2.25,4.5,90701
+GO01,43.666815,19.040645,42000,1,227,321,,,,,,,232,321,,,,,,,4,8,2.25,4.5,90702
+CA01,43.570518,19.130375,42000,1,122,209,241,281,,,,,241,281,,,,,,,4,8,2.25,4.5,90703
+CA02,43.573890,19.038350,42000,1,75,185,295,340,,,,,109,134,,,,,,,4,8,2.25,4.5,90703
+VG01,43.739436,19.394527,42000,1,339,104,239,257,280,313,,,1,89,239,257,,,,,4,8,2.25,4.5,90704
+VG02,43.753340,19.287580,42000,1,350,29,141,169,,,,,350,29,141,169,,,,,4,8,2.25,4.5,90704
+VG03,43.753297,19.174676,42000,1,54,92,166,193,,,,,166,193,,,,,,,4,8,2.25,4.5,90704
+VG04,43.802025,19.257704,42000,1,26,158,,,,,,,57,158,,,,,,,4,8,2.25,4.5,90704
+VG05,43.826143,19.362599,42000,1,336,155,212,248,,,,,336,155,217,248,,,,,4,8,2.25,4.5,90704
+VG06,43.870983,19.287462,42000,1,300,124,151,186,,,,,300,15,151,186,,,,,4,8,2.25,4.5,90704
+RO03,43.892632,19.071404,42000,1,197,225,247,335,,,,,247,335,,,,,,,4,8,2.25,4.5,90705
+RO04,43.972391,19.141850,42000,1,340,35,86,99,,,,,340,35,,,,,,,4,8,2.25,4.5,90705
+HP01,44.049381,18.915891,42000,1,21,54,,,,,,,21,54,,,,,,,4,8,2.25,4.5,90706
+SO02,43.927520,18.949930,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90707
+RU01,43.639590,19.426170,42000,1,44,251,,,,,,,91,139,213,251,,,,,4,8,2.25,4.5,90708
+RU02,43.641350,19.195800,42000,1,,,,,,,,,,,,,,,,,4,8,2.25,4.5,90708
+RU03,43.678462,19.308540,42000,1,35,204,,,,,,,35,139,,,,,,,4,8,2.25,4.5,90708
+RU04,43.678462,19.464788,42000,1,1,75,92,114,187,237,,,151,164,,,,,,,4,8,2.25,4.5,90708
+MO01,44.880950,18.205020,42000,1,326,16,24,61,231,247,301,319,341,16,301,319,,,,,4,8,2.25,4.5,90510
+MO02,44.890050,18.278550,42000,1,346,113,,,,,,,9,83,,,,,,,4,8,2.25,4.5,90510
+MO03,44.910720,18.142110,42000,1,191,233,303,349,,,,,191,209,,,,,,,4,8,2.25,4.5,90510
+MO04,44.981826,18.360548,42000,1,46,94,236,254,,,,,46,94,236,254,,,,,4,8,2.25,4.5,90510
+MO05,44.950480,18.166090,42000,1,37,53,131,165,205,279,302,339,37,53,205,279,302,339,,,4,8,2.25,4.5,90510
+VU01,45.020760,18.256628,42000,1,1,39,76,119,131,174,311,342,15,30,76,119,143,179,,,4,8,2.25,4.5,90523
+PE01,44.857723,18.538517,42000,1,132,192,204,219,271,309,,,132,192,204,219,,,,,4,8,2.25,4.5,90510
+PE02,44.884701,18.573551,42000,1,38,64,176,191,,,,,38,64,176,191,,,,,4,8,2.25,4.5,90510
+PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8,2.25,4.5,90510`;
+
+            // ================================================================
+            // 🚀 PARSIRANJE RAKETA
+            // ================================================================
+            function parseRocketData() {
+                const lines = ROCKET_CSV_DATA.trim().split('\n');
+                if (lines.length < 2) return;
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    const parts = line.split(',').map(s => s.trim());
+                    if (parts.length < 3) continue;
+                    const aName = parts[0];
+                    const pp8 = parseInt(parts[1]);
+                    const td6b = parseInt(parts[2]);
+                    if (isNaN(pp8) || isNaN(td6b)) continue;
+                    rocketStock[aName] = { pp8: pp8, td6b: td6b };
+                }
+                console.log('🚀 Rakete učitane:', Object.keys(rocketStock).length);
+            }
+
+            function recomputeRocketStock() {
+                const initialStock = {};
+                const lines = ROCKET_CSV_DATA.trim().split('\n');
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    const parts = line.split(',').map(s => s.trim());
+                    if (parts.length < 3) continue;
+                    const aName = parts[0];
+                    const pp8 = parseInt(parts[1]);
+                    const td6b = parseInt(parts[2]);
+                    if (!isNaN(pp8) && !isNaN(td6b)) initialStock[aName] = { pp8, td6b };
+                }
+                rocketStock = JSON.parse(JSON.stringify(initialStock));
+                bPoints.forEach(row => {
+                    if (row.confirmationTime && rocketStock[row.aName]) {
+                        rocketStock[row.aName].pp8 = Math.max(0, rocketStock[row.aName].pp8 - (row.pp8x || 0));
+                        rocketStock[row.aName].td6b = Math.max(0, rocketStock[row.aName].td6b - (row.td6bx || 0));
+                    }
+                });
+                if (firebaseInitialized) {
+                    firebaseDb.ref('confirmations').once('value').then(snapshot => {
+                        const data = snapshot.val();
+                        if (data) {
+                            Object.values(data).forEach(c => {
+                                const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                                if (bPoint && rocketStock[bPoint.aName]) {
+                                    rocketStock[bPoint.aName].pp8 = Math.max(0, rocketStock[bPoint.aName].pp8 - (c.pp8x || 0));
+                                    rocketStock[bPoint.aName].td6b = Math.max(0, rocketStock[bPoint.aName].td6b - (c.td6bx || 0));
+                                }
+                            });
+                        }
+                        updateARocketTooltips();
+                    });
+                }
+                updateARocketTooltips();
+            }
+
+            function updateARocketTooltips() {
+                markerData.forEach(item => {
+                    const stock = rocketStock[item.fpgs];
+                    if (stock) {
+                        item.marker.setPopupContent(`<b>${item.fpgs}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`);
+                    } else {
+                        item.marker.setPopupContent(`<b>${item.fpgs}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}`);
+                    }
+                });
+            }
+
+            function updateRocketStockAfterConfirmation(aName, pp8x, td6bx) {
+                if (!rocketStock[aName]) return;
+                rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
+                rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
+                updateARocketTooltips();
+                statusDiv.textContent = `🚀 ${aName}: PP8=${rocketStock[aName].pp8}, TD6B=${rocketStock[aName].td6b}`;
+                statusDiv.style.display = 'block';
+                setTimeout(() => statusDiv.style.display = 'none', 3000);
+            }
+
+            const aIcon = L.divIcon({
+                className: 'a-marker',
+                html: '<div style="width:6px;height:6px;background:#cc0000;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+            });
+            const aSelectedIcon = L.divIcon({
+                className: 'a-selected-marker',
+                html: '<div style="width:10px;height:10px;background:#ffcc00;border-radius:50%;border:2px solid #ff0000;box-shadow:0 0 8px rgba(255,0,0,0.8);"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+
+            const markerLayer = L.layerGroup().addTo(map);
+            const pp8Layer = L.layerGroup().addTo(map);
+            const pp6Layer = L.layerGroup().addTo(map);
+
+            parseRocketData();
+
+            const lines = csvData.split('\n');
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const cols = line.split(',');
+                if (cols.length < 26) continue;
+                const fpgs = cols[0];
+                const lat = parseFloat(cols[1]);
+                const lon = parseFloat(cols[2]);
+                if (isNaN(lat) || isNaN(lon)) continue;
+                const key = lat + ',' + lon;
+                if (!addedCoords[key]) {
+                    addedCoords[key] = true;
+                    const marker = L.marker([lat, lon], { icon: aIcon })
+                        .addTo(markerLayer)
+                        .bindPopup(`<b>${fpgs}</b><br>lat: ${lat}, lon: ${lon}`);
+                    marker.on('mouseover', e => showHoverTooltip(fpgs, e.latlng));
+                    marker.on('mouseout', () => hideHoverTooltip());
+                    marker.on('click', function(e) {
+                        if (activeA) activeA.marker.setIcon(aIcon);
+                        activeA = { fpgs, lat, lon, marker };
+                        activeA.marker.setIcon(aSelectedIcon);
+                        activeAKey = fpgs;
+                        filterByA = true;
+                        document.getElementById('activeAName').textContent = fpgs;
+                        updateSectorsVisibility();
+                        updatePopups();
+                        if (firebaseInitialized && activeARef) activeARef.set({ fpgs, lat, lon });
+                        L.DomEvent.stopPropagation(e);
+                    });
+                    markerData.push({ fpgs, lat, lon, marker });
+                }
+                const aKey = fpgs;
+                if (!sectorsByA[aKey]) sectorsByA[aKey] = { pp8: [], pp6: [] };
+                [[cols[5], cols[6]], [cols[7], cols[8]], [cols[9], cols[10]], [cols[11], cols[12]]].forEach(([start, end]) => {
+                    if (start && end && start.trim() !== '' && end.trim() !== '') {
+                        const coords = generateSectorCoords(lat, lon, 8, 4, start, end);
+                        if (coords) {
+                            const polygon = L.polygon(coords, { color: '#cc0000', weight: 1.5, opacity: 0.8, fillColor: '#ff0000', fillOpacity: 0.1 });
+                            allSectors.push({ polygon, type: 'pp8', aKey });
+                            sectorsByA[aKey].pp8.push(polygon);
+                            totalSectors++;
+                        }
+                    }
+                });
+                [[cols[13], cols[14]], [cols[15], cols[16]], [cols[17], cols[18]], [cols[19], cols[20]]].forEach(([start, end]) => {
+                    if (start && end && start.trim() !== '' && end.trim() !== '') {
+                        const coords = generateSectorCoords(lat, lon, 4.5, 2.25, start, end);
+                        if (coords) {
+                            const polygon = L.polygon(coords, { color: '#0000cc', weight: 1.5, opacity: 0.8, fillColor: '#0000ff', fillOpacity: 0.1 });
+                            allSectors.push({ polygon, type: 'pp6', aKey });
+                            sectorsByA[aKey].pp6.push(polygon);
+                            totalSectors++;
+                        }
+                    }
+                });
+            }
+            document.getElementById('count').textContent = totalSectors;
+            updateARocketTooltips();
+
+            const bIcon = L.divIcon({
+                className: 'b-marker',
+                html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            const bIconGray = L.divIcon({
+                className: 'b-marker-gray',
+                html: '<div style="width:10px;height:10px;background:#696969;border-radius:50%;border:2px solid #999;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+
+            function isOwner() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
+                if (!currentUser) return false;
+                return currentUser.uid === OWNER_UID;
+            }
+            function isConfirmer() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
+                if (!currentUser) return false;
+                return currentUser.uid === CONFIRMER_UID;
+            }
+            function isGridEditor() {
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
+                if (!currentUser) return false;
+                return currentUser.uid === GRID_EDITOR_UID;
+            }
+            function canConfirm() { return isOwner() || isConfirmer(); }
+            function canEditGrid() { return isOwner() || isGridEditor(); }
+
+            function updateOwnerUI() {
+                const isOwnerBool = isOwner();
+                const isConfirmerBool = isConfirmer();
+                const isGridEditorBool = isGridEditor();
+
+                document.querySelectorAll('#clearBbtn, #deleteSelectedB').forEach(btn => {
+                    btn.classList.toggle('delete-btn', !isOwnerBool);
+                    btn.classList.toggle('owner-active', isOwnerBool);
+                });
+                document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset').forEach(btn => {
+                    btn.classList.toggle('grid-btn', !(isOwnerBool || isGridEditorBool));
+                    btn.classList.toggle('grid-active', isOwnerBool || isGridEditorBool);
+                });
+                const confirmBtn = document.getElementById('showConfirmationsBtn');
+                if (confirmBtn) confirmBtn.style.display = isOwnerBool ? 'inline-block' : 'none';
+
+                const badge = document.getElementById('permissionBadge');
+                if (isOwnerBool) badge.textContent = '👑 Vlasnik (sve dozvole)';
+                else if (isConfirmerBool) badge.textContent = '✅ Potvrđivač';
+                else if (isGridEditorBool) badge.textContent = '🎨 Urednik kvadrata';
+                else badge.textContent = '👀 Samo čitanje';
+            }
+
+            function isPointInsideColoredCell(lat, lon) {
+                for (let c of greenCells) {
+                    if (lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax) return true;
+                }
+                return false;
+            }
+            function isPointInActiveASectors(lat, lon) {
+                if (!activeAKey || !sectorsByA[activeAKey]) return false;
+                const allPolys = [...sectorsByA[activeAKey].pp8, ...sectorsByA[activeAKey].pp6];
+                for (let poly of allPolys) if (pointInPolygon(lat, lon, poly)) return true;
+                return false;
+            }
+
+            function saveBPointsToFirebase() {
+                if (!firebaseInitialized || !isOwner() || !bPointsRef) return;
+                const data = bPoints.map(row => ({
+                    bIndex: row.bIndex, bLat: row.bLat, bLon: row.bLon,
+                    bDate: row.bDate ? row.bDate.toISOString() : null,
+                    bTime: row.bTime, aName: row.aName, az: row.az, dist: row.dist,
+                    pp8: row.pp8, td6b: row.td6b, pp8x: row.pp8x || 0, td6bx: row.td6bx || 0,
+                    confirmationTime: row.confirmationTime,
+                    confirmationDate: row.confirmationDate ? row.confirmationDate.toISOString() : null
+                }));
+                bPointsRef.set(data).catch(err => console.warn('Firebase write error:', err));
+            }
+
+            function confirmBPoint(row, marker) {
+                if (!canConfirm()) { alert('⚠️ Nemate dozvolu za potvrđivanje.'); return; }
+                if (row.confirmationTime) { alert('Ova tačka je već potvrđena.'); return; }
+                const pp8x = selectedPP8X, td6bx = selectedTD6BX;
+                const confirmNow = new Date();
+                row.pp8x = pp8x; row.td6bx = td6bx;
+                row.confirmationDate = confirmNow;
+                row.confirmationTime = confirmNow.toLocaleString();
+                updateRocketStockAfterConfirmation(row.aName, pp8x, td6bx);
+                marker.setPopupContent(`PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`);
+                if (hoveringBRow === row) {
+                    showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
+                    updateMouseAzimuth(lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
+                }
+                if (firebaseInitialized && bPointsRef) {
+                    if (isOwner()) {
+                        saveBPointsToFirebase();
+                        if (tableOverlay.style.display === 'block') renderTable();
+                    } else {
+                        const confirmRef = firebaseDb.ref('confirmations').push();
+                        confirmRef.set({
+                            bIndex: row.bIndex, pp8x, td6bx,
+                            confirmationTime: confirmNow.toISOString(),
+                            confirmedBy: currentUser ? currentUser.uid : 'unknown',
+                            confirmedByEmail: currentUser ? currentUser.email : 'unknown'
+                        }).then(() => {
+                            recomputeRocketStock();
+                            if (tableOverlay.style.display === 'block') renderTable();
+                        });
+                    }
+                }
+                if (tableOverlay.style.display === 'block') renderTable();
+            }
+
+            function addBPoint(lat, lon) {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može dodavati B tačke.'); return; }
+                if (!activeA) { alert('Prvo kliknite na A marker za centar.'); return; }
+                if (!isPointInsideColoredCell(lat, lon)) { alert('Tačka B mora biti unutar ZELENO obojene ćelije.'); return; }
+                const dist = haversine(activeA.lat, activeA.lon, lat, lon);
+                if (dist > 8) { alert('Udaljenost od aktivnog A je veća od 8 km. Nije dozvoljeno.'); return; }
+                if (isPointInActiveASectors(lat, lon)) { alert('Tačka B se nalazi unutar sektora (PP8 ili PP6) aktivnog A. Nije dozvoljeno.'); return; }
+                bCounter++;
+                const now = new Date(), timeStr = now.toLocaleString();
+                const az = bearing(activeA.lat, activeA.lon, lat, lon);
+                const row = {
+                    bIndex: bCounter, bLat: lat, bLon: lon, bDate: now, bTime: timeStr,
+                    aName: activeA.fpgs, az, dist, pp8: selectedPP8, td6b: selectedTD6B,
+                    pp8x: 0, td6bx: 0, confirmationTime: null, confirmationDate: null, marker: null
+                };
+                bPoints.push(row);
+                const marker = L.marker([lat, lon], { icon: bIcon })
+                    .addTo(bLayer)
+                    .bindPopup(`PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`);
+                marker.on('mouseover', e => {
+                    const prefix = row.confirmationTime ? 'B#' : 'B$';
+                    showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
+                    hoveringBRow = row;
+                    updateMouseAzimuth(e.latlng);
+                });
+                marker.on('mouseout', () => {
+                    hideHoverTooltip();
+                    hoveringBRow = null;
+                    if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                });
+                row.marker = marker;
+                marker.on('contextmenu', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    L.DomEvent.preventDefault(e);
+                    confirmBPoint(row, marker);
+                });
+                marker.on('click', function(e) {
+                    if (deleteMode && isOwner()) {
+                        deleteBPoint(row);
+                        L.DomEvent.stopPropagation(e);
+                        L.DomEvent.preventDefault(e);
+                    }
+                });
+                updatePopups();
+                updateMouseInfo();
+                if (tableOverlay.style.display === 'block') renderTable();
+                saveBPointsToFirebase();
+            }
+
+            function deleteBPoint(row) {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati.'); return; }
+                if (row.marker) bLayer.removeLayer(row.marker);
+                const idx = bPoints.indexOf(row);
+                if (idx !== -1) bPoints.splice(idx, 1);
+                updatePopups();
+                if (tableOverlay.style.display === 'block') renderTable();
+                deleteMode = false;
+                const deleteBtn = document.getElementById('deleteSelectedB');
+                deleteBtn.classList.remove('delete-mode');
+                deleteBtn.textContent = '❌B';
+                if (hoveringBRow === row) {
+                    hoveringBRow = null;
+                    if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                }
+                saveBPointsToFirebase();
+                recomputeRocketStock();
+            }
+
+            function clearBPoints() {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
+                bLayer.clearLayers();
+                bPoints = [];
+                bCounter = 0;
+                document.getElementById('bCount').textContent = '0';
+                document.getElementById('bInACount').textContent = '0';
+                updatePopups();
+                updateMouseInfo();
+                tableOverlay.style.display = 'none';
+                deleteMode = false;
+                const deleteBtn = document.getElementById('deleteSelectedB');
+                deleteBtn.classList.remove('delete-mode');
+                deleteBtn.textContent = '❌B';
+                hoveringBRow = null;
+                if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
+                saveBPointsToFirebase();
+                recomputeRocketStock();
+            }
+
+            function updateBVisibility() {
+                if (!activeA) {
+                    bPoints.forEach(row => { if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); } });
+                    document.getElementById('bInACount').textContent = '0';
+                    return;
+                }
+                const aSectors = sectorsByA[activeAKey];
+                if (!aSectors) {
+                    bPoints.forEach(row => { if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); } });
+                    document.getElementById('bInACount').textContent = '0';
+                    return;
+                }
+                const allPolys = [...aSectors.pp8, ...aSectors.pp6];
+                let insideCount = 0;
+                bPoints.forEach(row => {
+                    let inside = false;
+                    for (let poly of allPolys) if (pointInPolygon(row.bLat, row.bLon, poly)) { inside = true; break; }
+                    if (inside) {
+                        row.marker.setIcon(bIcon); row.marker.setOpacity(1); insideCount++;
+                    } else {
+                        row.marker.setIcon(bIconGray); row.marker.setOpacity(0.5);
+                    }
+                });
+                document.getElementById('bInACount').textContent = insideCount;
+            }
+
+            function updatePopups() {
+                document.getElementById('bCount').textContent = bPoints.length;
+                document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
+                updateBVisibility();
+            }
+
+            function updateSectorsVisibility() {
+                pp8Layer.clearLayers();
+                pp6Layer.clearLayers();
+                if (!sectorsVisible) return;
+                let sectorsToShow = [];
+                if (filterByA && activeAKey && sectorsByA[activeAKey]) {
+                    const aSectors = sectorsByA[activeAKey];
+                    aSectors.pp8.forEach(poly => sectorsToShow.push({ polygon: poly, type: 'pp8' }));
+                    aSectors.pp6.forEach(poly => sectorsToShow.push({ polygon: poly, type: 'pp6' }));
+                } else {
+                    allSectors.forEach(s => sectorsToShow.push(s));
+                }
+                sectorsToShow.forEach(s => {
+                    if (s.type === 'pp8') pp8Layer.addLayer(s.polygon);
+                    else if (s.type === 'pp6') pp6Layer.addLayer(s.polygon);
+                });
+                document.getElementById('activeAName').textContent = activeA ? activeA.fpgs : '-';
+                updateBVisibility();
+            }
+
+            // ================================================================
+            // GRID – PORAVNATO SA GEOGRAFSKOM MREŽOM
+            //   16°00'–20°00' E (16 kolona × 15')
+            //   42°30'–45°20' N (17 redova × 10')
+            // ================================================================
+            const gridLayer = L.layerGroup().addTo(map);
+
+            function saveGridColorsToFirebase() {
+                if (!firebaseInitialized || !canEditGrid() || !gridColorsRef) return;
+                const data = {
+                    greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
+                    blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
+                    redCells: redCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
+                };
+                gridColorsRef.set(data).catch(err => console.warn('Firebase write error:', err));
+            }
+
+            function applyGridStyles() {
+                gridCells.forEach(rect => {
+                    const latMin = rect._latMin, latMax = rect._latMax;
+                    const lonMin = rect._lonMin, lonMax = rect._lonMax;
+                    const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax);
+                    const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax);
+                    const isRed = redCells.some(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax);
+                    let color = 'black', weight = 2;
+                    if (isGreen) { color = '#00ff00'; weight = 4; }
+                    else if (isBlue) { color = '#0055ff'; weight = 4; }
+                    else if (isRed) { color = '#ff0000'; weight = 4; }
+                    rect.setStyle({ color, weight, opacity: 1 });
+                });
+            }
+
+            function loadGridColorsFromFirebase() {
+                if (!firebaseInitialized || !gridColorsRef) return;
+                gridColorsRef.once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (data) {
+                        if (data.greenCells) data.greenCells.forEach(c => { if (!greenCells.some(g => g.latMin === c.latMin && g.latMax === c.latMax && g.lonMin === c.lonMin && g.lonMax === c.lonMax)) greenCells.push(c); });
+                        if (data.blueCells) data.blueCells.forEach(c => { if (!blueCells.some(b => b.latMin === c.latMin && b.latMax === c.latMax && b.lonMin === c.lonMin && b.lonMax === c.lonMax)) blueCells.push(c); });
+                        if (data.redCells) data.redCells.forEach(c => { if (!redCells.some(r => r.latMin === c.latMin && r.latMax === c.latMax && r.lonMin === c.lonMin && r.lonMax === c.lonMax)) redCells.push(c); });
+                        applyGridStyles();
+                    }
+                });
+            }
+
+            function listenGridColors() {
+                if (!firebaseInitialized || !gridColorsRef) return;
+                if (gridColorsListener) gridColorsListener.off();
+                gridColorsListener = gridColorsRef;
+                gridColorsListener.on('value', snapshot => {
+                    const data = snapshot.val();
+                    if (data) {
+                        greenCells = []; blueCells = []; redCells = [];
+                        if (data.greenCells) data.greenCells.forEach(c => greenCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }));
+                        if (data.blueCells) data.blueCells.forEach(c => blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }));
+                        if (data.redCells) data.redCells.forEach(c => redCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }));
+                        applyGridStyles();
+                    }
+                });
+            }
+
+            function generateGrid() {
+                // PORAVNATO SA GEOGRAFSKOM MREŽOM
+                const latStart = 42 + 30/60;   // 42°30' N
+                const latEnd   = 45 + 20/60;   // 45°20' N
+                const latStep  = 10/60;        // 10'
+
+                const lonStart = 16.0;         // 16°00' E
+                const lonEnd   = 20.0;         // 20°00' E
+                const lonStep  = 15/60;        // 15'
+
+                const nLatRows = Math.round((latEnd - latStart) / latStep); // 17
+                const nLonCols = Math.round((lonEnd - lonStart) / lonStep); // 16
+                const STEPS = 12;
+
+                for (let i = 0; i < nLatRows; i++) {
+                    const latMin = latStart + i * latStep;
+                    const latMax = latMin + latStep;
+                    // Redni broj: gore = 11, dolje = 27 (17 redova)
+                       const redBroj = 27 - i;
+
+                    for (let j = 0; j < nLonCols; j++) {
+                        const lonMin = lonStart + j * lonStep;
+                        const lonMax = lonMin + lonStep;
+
+                        // Zakrivljene ivice (12 segmenata po strani)
+                        const ring = [];
+                        for (let k = 0; k <= STEPS; k++) ring.push([latMax, lonMin + (lonMax - lonMin) * k / STEPS]);
+                        for (let k = 1; k <= STEPS; k++) ring.push([latMax - (latMax - latMin) * k / STEPS, lonMax]);
+                        for (let k = 1; k <= STEPS; k++) ring.push([latMin, lonMax - (lonMax - lonMin) * k / STEPS]);
+                        for (let k = 1; k < STEPS; k++) ring.push([latMin + (latMax - latMin) * k / STEPS, lonMin]);
+
+                        const rect = L.polygon(ring, { color: 'black', weight: 2, opacity: 1, fillOpacity: 0, interactive: true });
+                        rect._latMin = latMin; rect._latMax = latMax;
+                        rect._lonMin = lonMin; rect._lonMax = lonMax;
+
+                        // Slovo: D..H, J..T (preskače se I), 16 kolona
+                           const slovo = String.fromCharCode(68 + j + (j >= 5 ? 1 : 0));
+                           const id = slovo + redBroj;
 
                         rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
                         rect.on('mouseout', () => hideHoverTooltip());
