@@ -2,10 +2,10 @@
 <html lang="sr">
 <head>
     <meta charset="UTF-8">
-    <title>Planseta – 3 uloge (auto‑load KMZ, potvrde, rakete)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planseta – 3 uloge (auto‑load KMZ, potvrde, rakete, geografska mreža)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* ----- STILOVI (ISTI KAO RANIJE) ----- */
         body, html { margin:0; padding:0; height:100%; font-family: sans-serif; }
         #map { height:100%; width:100%; cursor: crosshair; }
         #loginOverlay {
@@ -51,6 +51,8 @@
         .custom-control button.refresh-btn { background: #17a2b8; color: #fff; border-color: #17a2b8; }
         .custom-control button.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .custom-control button.grid-blue { background: #0055ff; color: #fff; border-color: #0055ff; }
+        .custom-control button.grat-on { background: #000000; color: #fff; border-color: #000000; }
+        .custom-control button.grat-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control button.firebase-on { background: #ffca28; color: #000; border-color: #ffca28; }
         .custom-control button.firebase-off { background: #6c757d; color: #fff; border-color: #6c757d; }
         .custom-control .separator { width: 70%; height: 1px; background: #ccc; margin: 2px 0; }
@@ -113,6 +115,18 @@
             font-size: 12px; z-index: 1000; pointer-events: none;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
+        .graticule-label {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #000;
+            border-radius: 2px;
+            padding: 0px 3px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #000;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
         @media (max-width:600px) {
             .custom-control { left: 10px; padding: 4px 6px 4px 8px; gap: 2px; max-height: 80vh; }
             .custom-control button, .custom-control .dropdown-btn { width: 22px; height: 22px; font-size: 10px; line-height: 22px; }
@@ -127,7 +141,6 @@
     </style>
 </head>
 <body>
-    <!-- LOGIN OVERLAY -->
     <div id="loginOverlay">
         <div id="loginBox">
             <h2>📍 Planseta</h2>
@@ -156,6 +169,8 @@
         <button id="toggleMapBtn" class="map-on" title="Prikaži/sakrij mapu">🗺️</button>
         <span class="separator"></span>
         <button id="toggleABtn" class="a-on" title="Prikaži/sakrij sve A tačke">A</button>
+        <span class="separator"></span>
+        <button id="gratToggleBtn" class="grat-on" title="Prikaži/sakrij geografsku mrežu">📐</button>
         <span class="separator"></span>
         <button id="radarToggle" class="radar-off">🖼️</button>
         <span class="separator"></span>
@@ -239,23 +254,12 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
 
-            // ================================================================
-            // 🔑 ULOGE – POSTAVITE STVARNE UID-OVE
-            // ================================================================
             const OWNER_UID = 'VqJ1Yg0qLxOOE5tG0ijBLoUqxbu1';
             const CONFIRMER_UID = 'dm0cuDRPCmeTfbGZwW3HDurj4qp2';
             const GRID_EDITOR_UID = 'Xy1NgNTmhUYZHG2qf4nO1CN6qjS2';
 
-            // ================================================================
-            // 🚀 POČETNO STANJE RAKETA – OVDJE ZALIJEPI SVOJ CSV
-            // ================================================================
-            // CSV format: A naziv,PP8,TD6B
-            // Primjer:
-            // A naziv,PP8,TD6B
-            // NT,10,5
-            // 1,8,3
             const ROCKET_CSV_DATA = `
-    A naziv,PP8,TD6B
+A naziv,PP8,TD6B
 NT,0,0
 1,6,0
 4,4,0
@@ -598,9 +602,6 @@ PE01,4,3
 PE02,4,3
 PE03,4,3`;
 
-            // ================================================================
-            // 🔥 FIREBASE KONFIGURACIJA
-            // ================================================================
             const firebaseConfig = {
                 apiKey: "AIzaSyCiu6siFd6lfzD0JtQLnWkOE7mMb0NMGZA",
                 authDomain: "planseta-ce461.firebaseapp.com",
@@ -618,26 +619,20 @@ PE03,4,3`;
                 firebaseDb = firebase.database();
                 firebaseInitialized = true;
                 document.getElementById('firebaseStatusBtn').className = 'firebase-on';
-                console.log('✅ Firebase inicijalizovan');
             } catch (e) {
-                console.error('❌ Firebase init greška:', e);
-                alert('Greška pri povezivanju na Firebase:\n' + e.message);
-                // Nastavi bez Firebase-a
+                console.error('Firebase init greška:', e);
             }
 
             const auth = firebase.auth ? firebase.auth() : null;
             let currentUser = null;
 
-            // ================================================================
-            // 📌 MAPA I DOM REFERENCE
-            // ================================================================
             const map = L.map('map').setView([44.4, 17.5], 8);
             const tileUrl = 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png';
             const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19, attribution: '© OpenStreetMap France' }).addTo(map);
             let mapVisible = true;
             document.getElementById('toggleMapBtn').addEventListener('click', function() {
-                if (mapVisible) { map.removeLayer(tileLayer); mapVisible = false; this.className = 'map-off'; this.title = 'Prikaži mapu'; }
-                else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; this.title = 'Sakrij mapu'; }
+                if (mapVisible) { map.removeLayer(tileLayer); mapVisible = false; this.className = 'map-off'; }
+                else { tileLayer.addTo(map); mapVisible = true; this.className = 'map-on'; }
             });
 
             const mouseAzimuthDiv = document.getElementById('mouse-azimuth');
@@ -645,6 +640,98 @@ PE03,4,3`;
             const statusDiv = document.getElementById('status');
             const tableWrapper = document.getElementById('tableWrapper');
             const tableOverlay = document.getElementById('tableOverlay');
+
+            // ================================================================
+            // 🌐 GEOGRAFSKA MREŽA – CRNE LINIJE (meridijani 15', paralele 10')
+            // Poravnato sa kvadratima mreže: 16°00'–20°00' E, 42°30'–45°20' N
+            // ================================================================
+            const graticuleLayer = L.layerGroup().addTo(map);
+            let graticuleVisible = true;
+
+            function formatLonG(deg) {
+                const d = Math.floor(deg);
+                const m = Math.round((deg - d) * 60);
+                return `${d}°${String(m).padStart(2, '0')}'E`;
+            }
+            function formatLatG(deg) {
+                const d = Math.floor(deg);
+                const m = Math.round((deg - d) * 60);
+                return `${d}°${String(m).padStart(2, '0')}'N`;
+            }
+
+            (function buildGraticule() {
+                const LON_START = 16.0, LON_END = 20.0, LON_STEP = 15/60;
+                const LAT_START = 42 + 30/60, LAT_END = 45 + 20/60, LAT_STEP = 10/60;
+
+                // TANKE CRNE linije – da se ne vide duplo ispod debljih ivica kvadrata
+                const lineStyle = {
+                    color: '#000000',
+                    weight: 1,
+                    opacity: 0.7,
+                    interactive: false
+                };
+                const mainLineStyle = {
+                    color: '#000000',
+                    weight: 1.5,
+                    opacity: 0.9,
+                    interactive: false
+                };
+
+                const nLon = Math.round((LON_END - LON_START) / LON_STEP);
+                const nLat = Math.round((LAT_END - LAT_START) / LAT_STEP);
+
+                // Meridijani
+                for (let i = 0; i <= nLon; i++) {
+                    const lon = Math.round((LON_START + i * LON_STEP) * 10000) / 10000;
+                    const isMain = Math.abs(lon - Math.round(lon)) < 0.001;
+                    graticuleLayer.addLayer(L.polyline(
+                        [[LAT_START, lon], [LAT_END, lon]],
+                        isMain ? mainLineStyle : lineStyle
+                    ));
+                    graticuleLayer.addLayer(L.marker([LAT_END, lon], {
+                        icon: L.divIcon({
+                            className: 'graticule-label',
+                            html: formatLonG(lon),
+                            iconSize: [50, 14],
+                            iconAnchor: [25, 7]
+                        }),
+                        interactive: false
+                    }));
+                }
+
+                // Paralele
+                for (let i = 0; i <= nLat; i++) {
+                    const lat = Math.round((LAT_START + i * LAT_STEP) * 10000) / 10000;
+                    const isMain = Math.abs(lat - Math.round(lat)) < 0.001;
+                    graticuleLayer.addLayer(L.polyline(
+                        [[lat, LON_START], [lat, LON_END]],
+                        isMain ? mainLineStyle : lineStyle
+                    ));
+                    graticuleLayer.addLayer(L.marker([lat, LON_START], {
+                        icon: L.divIcon({
+                            className: 'graticule-label',
+                            html: formatLatG(lat),
+                            iconSize: [50, 14],
+                            iconAnchor: [50, 7]
+                        }),
+                        interactive: false
+                    }));
+                }
+            })();
+
+            document.getElementById('gratToggleBtn').addEventListener('click', function() {
+                if (graticuleVisible) {
+                    map.removeLayer(graticuleLayer);
+                    graticuleVisible = false;
+                    this.className = 'grat-off';
+                    this.title = 'Prikaži geografsku mrežu';
+                } else {
+                    map.addLayer(graticuleLayer);
+                    graticuleVisible = true;
+                    this.className = 'grat-on';
+                    this.title = 'Sakrij geografsku mrežu';
+                }
+            });
 
             // ================================================================
             // 📦 POMOĆNE FUNKCIJE
@@ -716,7 +803,7 @@ PE03,4,3`;
             }
 
             // ================================================================
-            // 🔐 LOGIN / REGISTRACIJA (samo ako je auth dostupan)
+            // 🔐 LOGIN
             // ================================================================
             const loginOverlay = document.getElementById('loginOverlay');
             const loginEmail = document.getElementById('loginEmail');
@@ -746,7 +833,6 @@ PE03,4,3`;
                             loginError.style.display = 'block';
                         });
                 });
-
                 registerBtn.addEventListener('click', () => {
                     const email = regEmail.value.trim();
                     const pass = regPassword.value.trim();
@@ -756,13 +842,12 @@ PE03,4,3`;
                     }
                     auth.createUserWithEmailAndPassword(email, pass)
                         .then(() => {
-                            alert('✅ Nalog kreiran! Prijavljen si.');
+                            alert('✅ Nalog kreiran!');
                             registerForm.style.display = 'none';
                             showRegisterLink.style.display = 'inline';
                         })
                         .catch(err => alert('❌ ' + err.message));
                 });
-
                 showRegisterLink.addEventListener('click', (e) => {
                     e.preventDefault();
                     registerForm.style.display = 'block';
@@ -774,7 +859,6 @@ PE03,4,3`;
                     showRegisterLink.style.display = 'inline';
                 });
             } else {
-                console.warn('⚠️ Firebase Auth nije dostupan – prelazim na bypass.');
                 loginOverlay.style.display = 'none';
             }
 
@@ -787,7 +871,7 @@ PE03,4,3`;
             let deleteMode = false;
             let activeA = null, activeAKey = null, filterByA = false;
             let sectorsByA = {}, allSectors = [], sectorsVisible = true;
-            let greenCells = [], blueCells = [];
+            let greenCells = [], blueCells = [], redCells = [];
             let gridCells = [], selectedGridColor = null;
             let pngOverlay = null, pngVisible = false;
             let pngImgWidth = null, pngImgHeight = null;
@@ -799,22 +883,15 @@ PE03,4,3`;
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
             let confirmationsListener = null;
+            let rocketStock = {};
 
-            // ---- RAKETNO STANJE ----
-            let rocketStock = {}; // { aName: { pp8: number, td6b: number } }
-
-            // ---- SERVER METADATA ----
-            let currentKmzName = null;
-            let currentKmzModified = null;
-            let currentKmzSize = null;
+            let currentKmzName = null, currentKmzModified = null, currentKmzSize = null;
             const PNG_BOUNDS = [
                 [41.46974424083233, 15.46096394958954],
                 [45.96991870077077, 21.66292597350616]
             ];
 
-            // ================================================================
-            // 📋 KOMPLETAN CSV (ISTI KAO RANIJE)
-            // ================================================================
+            // Cijeli CSV podaci (isti kao u originalu)
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501
 1,45.197576,17.002114,42000,1,305,105,,,,,,,305,105,,,,,,,4,8,2.25,4.5,90501
@@ -1164,14 +1241,11 @@ PE02,44.884701,18.573551,42000,1,38,64,176,191,,,,,38,64,176,191,,,,,4,8,2.25,4.
 PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8,2.25,4.5,90510`;
 
             // ================================================================
-            // 🚀 PARSIRANJE POČETNOG STANJA RAKETA
+            // 🚀 PARSIRANJE RAKETA
             // ================================================================
             function parseRocketData() {
                 const lines = ROCKET_CSV_DATA.trim().split('\n');
-                if (lines.length < 2) {
-                    console.warn('⚠️ Nema podataka o raketama.');
-                    return;
-                }
+                if (lines.length < 2) return;
                 for (let i = 1; i < lines.length; i++) {
                     const line = lines[i].trim();
                     if (!line) continue;
@@ -1180,18 +1254,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     const aName = parts[0];
                     const pp8 = parseInt(parts[1]);
                     const td6b = parseInt(parts[2]);
-                    if (isNaN(pp8) || isNaN(td6b)) {
-                        console.warn(`⚠️ Neispravan red u raketnom CSV-u: ${line}`);
-                        continue;
-                    }
+                    if (isNaN(pp8) || isNaN(td6b)) continue;
                     rocketStock[aName] = { pp8: pp8, td6b: td6b };
                 }
-                console.log('🚀 Početno stanje raketa učitano:', rocketStock);
+                console.log('🚀 Rakete učitane:', Object.keys(rocketStock).length);
             }
 
-            // ================================================================
-            // 🔄 PRERAČUNAVANJE STANJA RAKETA NA OSNOVU SVIH POTVRDA
-            // ================================================================
             function recomputeRocketStock() {
                 const initialStock = {};
                 const lines = ROCKET_CSV_DATA.trim().split('\n');
@@ -1203,92 +1271,54 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     const aName = parts[0];
                     const pp8 = parseInt(parts[1]);
                     const td6b = parseInt(parts[2]);
-                    if (!isNaN(pp8) && !isNaN(td6b)) {
-                        initialStock[aName] = { pp8: pp8, td6b: td6b };
-                    }
+                    if (!isNaN(pp8) && !isNaN(td6b)) initialStock[aName] = { pp8, td6b };
                 }
                 rocketStock = JSON.parse(JSON.stringify(initialStock));
-                // Oduzmi sve potvrde iz bPoints (one koje je vlasnik već upisao)
                 bPoints.forEach(row => {
-                    if (row.confirmationTime) {
-                        const aName = row.aName;
-                        if (rocketStock[aName]) {
-                            const pp8x = row.pp8x || 0;
-                            const td6bx = row.td6bx || 0;
-                            rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
-                            rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
-                        }
+                    if (row.confirmationTime && rocketStock[row.aName]) {
+                        rocketStock[row.aName].pp8 = Math.max(0, rocketStock[row.aName].pp8 - (row.pp8x || 0));
+                        rocketStock[row.aName].td6b = Math.max(0, rocketStock[row.aName].td6b - (row.td6bx || 0));
                     }
                 });
-                // Također oduzmi sve potvrde iz confirmations čvora (koje je potvrđivač poslao, a vlasnik još nije upisao u bPoints)
                 if (firebaseInitialized) {
-                    const confirmRef = firebaseDb.ref('confirmations');
-                    confirmRef.once('value').then(snapshot => {
+                    firebaseDb.ref('confirmations').once('value').then(snapshot => {
                         const data = snapshot.val();
                         if (data) {
-                            const confirmations = Object.values(data);
-                            confirmations.forEach(c => {
+                            Object.values(data).forEach(c => {
                                 const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                                if (bPoint) {
-                                    const aName = bPoint.aName;
-                                    if (rocketStock[aName]) {
-                                        const pp8x = c.pp8x || 0;
-                                        const td6bx = c.td6bx || 0;
-                                        rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
-                                        rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
-                                    }
+                                if (bPoint && rocketStock[bPoint.aName]) {
+                                    rocketStock[bPoint.aName].pp8 = Math.max(0, rocketStock[bPoint.aName].pp8 - (c.pp8x || 0));
+                                    rocketStock[bPoint.aName].td6b = Math.max(0, rocketStock[bPoint.aName].td6b - (c.td6bx || 0));
                                 }
                             });
                         }
                         updateARocketTooltips();
-                        console.log('🔄 Stanje raketa reizračunato (sa confirmations):', rocketStock);
-                    }).catch(err => console.warn('Greška pri čitanju confirmations:', err));
-                } else {
-                    updateARocketTooltips();
-                    console.log('🔄 Stanje raketa reizračunato (bez Firebase):', rocketStock);
+                    });
                 }
                 updateARocketTooltips();
             }
 
-            // ================================================================
-            // 🖱️ AŽURIRANJE TOOLTIPA ZA A MARKERE SA STANJEM RAKETA
-            // ================================================================
             function updateARocketTooltips() {
                 markerData.forEach(item => {
-                    const aName = item.fpgs;
-                    const stock = rocketStock[aName];
+                    const stock = rocketStock[item.fpgs];
                     if (stock) {
-                        const popupContent = `<b>${aName}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`;
-                        item.marker.setPopupContent(popupContent);
+                        item.marker.setPopupContent(`<b>${item.fpgs}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`);
                     } else {
-                        const popupContent = `<b>${aName}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}`;
-                        item.marker.setPopupContent(popupContent);
+                        item.marker.setPopupContent(`<b>${item.fpgs}</b><br>lat: ${item.lat.toFixed(6)}, lon: ${item.lon.toFixed(6)}`);
                     }
                 });
             }
 
-            // ================================================================
-            // ✏️ AŽURIRANJE STANJA RAKETA NAKON POTVRDE (lokalno)
-            // ================================================================
             function updateRocketStockAfterConfirmation(aName, pp8x, td6bx) {
-                if (!rocketStock[aName]) {
-                    console.warn(`⚠️ Nema podataka o raketama za A tačku: ${aName}`);
-                    return;
-                }
+                if (!rocketStock[aName]) return;
                 rocketStock[aName].pp8 = Math.max(0, rocketStock[aName].pp8 - pp8x);
                 rocketStock[aName].td6b = Math.max(0, rocketStock[aName].td6b - td6bx);
-                console.log(`🚀 Ažurirano stanje za ${aName}: PP8=${rocketStock[aName].pp8}, TD6B=${rocketStock[aName].td6b}`);
                 updateARocketTooltips();
-                const statusDiv = document.getElementById('status');
                 statusDiv.textContent = `🚀 ${aName}: PP8=${rocketStock[aName].pp8}, TD6B=${rocketStock[aName].td6b}`;
                 statusDiv.style.display = 'block';
-                statusDiv.style.color = '#ffd700';
-                setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+                setTimeout(() => statusDiv.style.display = 'none', 3000);
             }
 
-            // ================================================================
-            // 🗺️ A MARKERI I SEKTORI
-            // ================================================================
             const aIcon = L.divIcon({
                 className: 'a-marker',
                 html: '<div style="width:6px;height:6px;background:#cc0000;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
@@ -1335,55 +1365,29 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         document.getElementById('activeAName').textContent = fpgs;
                         updateSectorsVisibility();
                         updatePopups();
-                        if (firebaseInitialized && activeARef) {
-                            activeARef.set({ fpgs: fpgs, lat: lat, lon: lon });
-                        }
+                        if (firebaseInitialized && activeARef) activeARef.set({ fpgs, lat, lon });
                         L.DomEvent.stopPropagation(e);
                     });
                     markerData.push({ fpgs, lat, lon, marker });
                 }
                 const aKey = fpgs;
                 if (!sectorsByA[aKey]) sectorsByA[aKey] = { pp8: [], pp6: [] };
-                const pp8Pairs = [
-                    [cols[5], cols[6]],
-                    [cols[7], cols[8]],
-                    [cols[9], cols[10]],
-                    [cols[11], cols[12]]
-                ];
-                pp8Pairs.forEach(([start, end]) => {
+                [[cols[5], cols[6]], [cols[7], cols[8]], [cols[9], cols[10]], [cols[11], cols[12]]].forEach(([start, end]) => {
                     if (start && end && start.trim() !== '' && end.trim() !== '') {
                         const coords = generateSectorCoords(lat, lon, 8, 4, start, end);
                         if (coords) {
-                            const polygon = L.polygon(coords, {
-                                color: '#cc0000',
-                                weight: 1.5,
-                                opacity: 0.8,
-                                fillColor: '#ff0000',
-                                fillOpacity: 0.1
-                            });
+                            const polygon = L.polygon(coords, { color: '#cc0000', weight: 1.5, opacity: 0.8, fillColor: '#ff0000', fillOpacity: 0.1 });
                             allSectors.push({ polygon, type: 'pp8', aKey });
                             sectorsByA[aKey].pp8.push(polygon);
                             totalSectors++;
                         }
                     }
                 });
-                const pp6Pairs = [
-                    [cols[13], cols[14]],
-                    [cols[15], cols[16]],
-                    [cols[17], cols[18]],
-                    [cols[19], cols[20]]
-                ];
-                pp6Pairs.forEach(([start, end]) => {
+                [[cols[13], cols[14]], [cols[15], cols[16]], [cols[17], cols[18]], [cols[19], cols[20]]].forEach(([start, end]) => {
                     if (start && end && start.trim() !== '' && end.trim() !== '') {
                         const coords = generateSectorCoords(lat, lon, 4.5, 2.25, start, end);
                         if (coords) {
-                            const polygon = L.polygon(coords, {
-                                color: '#0000cc',
-                                weight: 1.5,
-                                opacity: 0.8,
-                                fillColor: '#0000ff',
-                                fillOpacity: 0.1
-                            });
+                            const polygon = L.polygon(coords, { color: '#0000cc', weight: 1.5, opacity: 0.8, fillColor: '#0000ff', fillOpacity: 0.1 });
                             allSectors.push({ polygon, type: 'pp6', aKey });
                             sectorsByA[aKey].pp6.push(polygon);
                             totalSectors++;
@@ -1394,16 +1398,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             document.getElementById('count').textContent = totalSectors;
             updateARocketTooltips();
 
-            // ================================================================
-            // B IKONICE – TAMNIJA SIVA (30% tamnija od #999)
-            // ================================================================
             const bIcon = L.divIcon({
                 className: 'b-marker',
                 html: '<div style="width:10px;height:10px;background:#0066cc;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5);"></div>',
                 iconSize: [16, 16],
                 iconAnchor: [8, 8]
             });
-            // ⬇️ OVDJE JE PROMIJENJENA SIVA BOJA – 30% TAMNIJA (#999 → #696969)
             const bIconGray = L.divIcon({
                 className: 'b-marker-gray',
                 html: '<div style="width:10px;height:10px;background:#696969;border-radius:50%;border:2px solid #999;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
@@ -1411,239 +1411,126 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 iconAnchor: [7, 7]
             });
 
-            // ================================================================
-            // 🛡️ FUNKCIJE ZA ULOGE – SA BYPASS ZA LOCALHOST
-            // ================================================================
             function isOwner() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                    return true;
-                }
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === OWNER_UID;
             }
-
             function isConfirmer() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                    return true;
-                }
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === CONFIRMER_UID;
             }
-
             function isGridEditor() {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                    return true;
-                }
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true;
                 if (!currentUser) return false;
                 return currentUser.uid === GRID_EDITOR_UID;
             }
-
-            function canConfirm() {
-                return isOwner() || isConfirmer();
-            }
-
-            function canEditGrid() {
-                return isOwner() || isGridEditor();
-            }
+            function canConfirm() { return isOwner() || isConfirmer(); }
+            function canEditGrid() { return isOwner() || isGridEditor(); }
 
             function updateOwnerUI() {
                 const isOwnerBool = isOwner();
                 const isConfirmerBool = isConfirmer();
                 const isGridEditorBool = isGridEditor();
 
-                const deleteBtns = document.querySelectorAll('#clearBbtn, #deleteSelectedB');
-                deleteBtns.forEach(btn => {
-                    if (isOwnerBool) {
-                        btn.classList.remove('delete-btn');
-                        btn.classList.add('owner-active');
-                    } else {
-                        btn.classList.remove('owner-active');
-                        btn.classList.add('delete-btn');
-                    }
+                document.querySelectorAll('#clearBbtn, #deleteSelectedB').forEach(btn => {
+                    btn.classList.toggle('delete-btn', !isOwnerBool);
+                    btn.classList.toggle('owner-active', isOwnerBool);
                 });
-
-                const gridBtns = document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset');
-                gridBtns.forEach(btn => {
-                    if (isOwnerBool || isGridEditorBool) {
-                        btn.classList.remove('grid-btn');
-                        btn.classList.add('grid-active');
-                    } else {
-                        btn.classList.remove('grid-active');
-                        btn.classList.add('grid-btn');
-                    }
+                document.querySelectorAll('#gridBlue, #gridGreen, #gridRed, #gridReset').forEach(btn => {
+                    btn.classList.toggle('grid-btn', !(isOwnerBool || isGridEditorBool));
+                    btn.classList.toggle('grid-active', isOwnerBool || isGridEditorBool);
                 });
-
                 const confirmBtn = document.getElementById('showConfirmationsBtn');
-                if (confirmBtn) {
-                    confirmBtn.style.display = isOwnerBool ? 'inline-block' : 'none';
-                }
+                if (confirmBtn) confirmBtn.style.display = isOwnerBool ? 'inline-block' : 'none';
 
                 const badge = document.getElementById('permissionBadge');
-                if (isOwnerBool) {
-                    badge.textContent = '👑 Vlasnik (sve dozvole)';
-                } else if (isConfirmerBool) {
-                    badge.textContent = '✅ Potvrđivač (desni klik za potvrdu)';
-                } else if (isGridEditorBool) {
-                    badge.textContent = '🎨 Urednik kvadrata (bojenje)';
-                } else {
-                    badge.textContent = '👀 Samo čitanje';
-                }
-                console.log('UI ažuriran. Vlasnik?', isOwnerBool, 'Potvrđivač?', isConfirmerBool, 'Urednik kvadrata?', isGridEditorBool);
+                if (isOwnerBool) badge.textContent = '👑 Vlasnik (sve dozvole)';
+                else if (isConfirmerBool) badge.textContent = '✅ Potvrđivač';
+                else if (isGridEditorBool) badge.textContent = '🎨 Urednik kvadrata';
+                else badge.textContent = '👀 Samo čitanje';
             }
 
-            // ================================================================
-            // FUNKCIJE ZA B TAČKE (samo vlasnik)
-            // ================================================================
             function isPointInsideColoredCell(lat, lon) {
                 for (let c of greenCells) {
                     if (lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax) return true;
                 }
                 return false;
             }
-
             function isPointInActiveASectors(lat, lon) {
                 if (!activeAKey || !sectorsByA[activeAKey]) return false;
                 const allPolys = [...sectorsByA[activeAKey].pp8, ...sectorsByA[activeAKey].pp6];
-                for (let poly of allPolys) {
-                    if (pointInPolygon(lat, lon, poly)) return true;
-                }
+                for (let poly of allPolys) if (pointInPolygon(lat, lon, poly)) return true;
                 return false;
             }
 
             function saveBPointsToFirebase() {
                 if (!firebaseInitialized || !isOwner() || !bPointsRef) return;
                 const data = bPoints.map(row => ({
-                    bIndex: row.bIndex,
-                    bLat: row.bLat,
-                    bLon: row.bLon,
+                    bIndex: row.bIndex, bLat: row.bLat, bLon: row.bLon,
                     bDate: row.bDate ? row.bDate.toISOString() : null,
-                    bTime: row.bTime,
-                    aName: row.aName,
-                    az: row.az,
-                    dist: row.dist,
-                    pp8: row.pp8,
-                    td6b: row.td6b,
-                    pp8x: row.pp8x || 0,
-                    td6bx: row.td6bx || 0,
+                    bTime: row.bTime, aName: row.aName, az: row.az, dist: row.dist,
+                    pp8: row.pp8, td6b: row.td6b, pp8x: row.pp8x || 0, td6bx: row.td6bx || 0,
                     confirmationTime: row.confirmationTime,
                     confirmationDate: row.confirmationDate ? row.confirmationDate.toISOString() : null
                 }));
                 bPointsRef.set(data).catch(err => console.warn('Firebase write error:', err));
             }
 
-            // ================================================================
-            // POTVRĐIVANJE – AŽURIRA I RAKETNO STANJE I OSVJEŽAVA TABELU
-            // ================================================================
             function confirmBPoint(row, marker) {
-                if (!canConfirm()) {
-                    alert('⚠️ Nemate dozvolu za potvrđivanje.');
-                    return;
-                }
-                if (row.confirmationTime) {
-                    alert('Ova tačka je već potvrđena.');
-                    return;
-                }
-                const pp8x = selectedPP8X;
-                const td6bx = selectedTD6BX;
+                if (!canConfirm()) { alert('⚠️ Nemate dozvolu za potvrđivanje.'); return; }
+                if (row.confirmationTime) { alert('Ova tačka je već potvrđena.'); return; }
+                const pp8x = selectedPP8X, td6bx = selectedTD6BX;
                 const confirmNow = new Date();
-                row.pp8x = pp8x;
-                row.td6bx = td6bx;
+                row.pp8x = pp8x; row.td6bx = td6bx;
                 row.confirmationDate = confirmNow;
                 row.confirmationTime = confirmNow.toLocaleString();
-
-                // Ažuriraj stanje raketa za odgovarajuću A tačku (lokalno)
                 updateRocketStockAfterConfirmation(row.aName, pp8x, td6bx);
-
-                const popupConfirmed =
-                    `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`;
-                marker.setPopupContent(popupConfirmed);
-
+                marker.setPopupContent(`PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}`);
                 if (hoveringBRow === row) {
                     showHoverTooltip(`B#${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
                     updateMouseAzimuth(lastMouseLatLng || { lat: row.bLat, lng: row.bLon });
                 }
-
                 if (firebaseInitialized && bPointsRef) {
                     if (isOwner()) {
                         saveBPointsToFirebase();
-                        // Ako je vlasnik, odmah osvježi tabelu
                         if (tableOverlay.style.display === 'block') renderTable();
                     } else {
-                        // Potvrđivač šalje zahtjev – čuvamo i email
                         const confirmRef = firebaseDb.ref('confirmations').push();
                         confirmRef.set({
-                            bIndex: row.bIndex,
-                            pp8x: pp8x,
-                            td6bx: td6bx,
+                            bIndex: row.bIndex, pp8x, td6bx,
                             confirmationTime: confirmNow.toISOString(),
                             confirmedBy: currentUser ? currentUser.uid : 'unknown',
                             confirmedByEmail: currentUser ? currentUser.email : 'unknown'
                         }).then(() => {
-                            console.log('✅ Zahtjev za potvrdu poslan.');
-                            // Nakon slanja, ponovo izračunaj stanje (da bi i potvrđivaču odmah prikazalo)
                             recomputeRocketStock();
-                            // Osvježi tabelu ako je otvorena
                             if (tableOverlay.style.display === 'block') renderTable();
-                        }).catch(err => {
-                            console.error('❌ Greška pri slanju zahtjeva:', err);
                         });
                     }
                 }
-
-                // Osvježi tabelu (ako je otvorena) – već smo to uradili unutar uslova, ali za svaki slučaj:
                 if (tableOverlay.style.display === 'block') renderTable();
             }
 
-            // ================================================================
-            // ADD B POINT – OGRANIČENJE 8 km
-            // ================================================================
             function addBPoint(lat, lon) {
-                if (!isOwner()) {
-                    alert('⚠️ Samo vlasnik može dodavati B tačke.');
-                    return;
-                }
-                if (!activeA) {
-                    alert('Prvo kliknite na A marker za centar.');
-                    return;
-                }
-                if (!isPointInsideColoredCell(lat, lon)) {
-                    alert('Tačka B mora biti unutar ZELENO obojene ćelije.');
-                    return;
-                }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može dodavati B tačke.'); return; }
+                if (!activeA) { alert('Prvo kliknite na A marker za centar.'); return; }
+                if (!isPointInsideColoredCell(lat, lon)) { alert('Tačka B mora biti unutar ZELENO obojene ćelije.'); return; }
                 const dist = haversine(activeA.lat, activeA.lon, lat, lon);
-                if (dist > 8) {
-                    alert('Udaljenost od aktivnog A je veća od 8 km. Nije dozvoljeno.');
-                    return;
-                }
-                if (isPointInActiveASectors(lat, lon)) {
-                    alert('Tačka B se nalazi unutar sektora (PP8 ili PP6) aktivnog A. Nije dozvoljeno.');
-                    return;
-                }
+                if (dist > 8) { alert('Udaljenost od aktivnog A je veća od 8 km. Nije dozvoljeno.'); return; }
+                if (isPointInActiveASectors(lat, lon)) { alert('Tačka B se nalazi unutar sektora (PP8 ili PP6) aktivnog A. Nije dozvoljeno.'); return; }
                 bCounter++;
                 const now = new Date(), timeStr = now.toLocaleString();
                 const az = bearing(activeA.lat, activeA.lon, lat, lon);
                 const row = {
-                    bIndex: bCounter,
-                    bLat: lat,
-                    bLon: lon,
-                    bDate: now,
-                    bTime: timeStr,
-                    aName: activeA.fpgs,
-                    az: az,
-                    dist: dist,
-                    pp8: selectedPP8,
-                    td6b: selectedTD6B,
-                    pp8x: 0,
-                    td6bx: 0,
-                    confirmationTime: null,
-                    confirmationDate: null,
-                    marker: null
+                    bIndex: bCounter, bLat: lat, bLon: lon, bDate: now, bTime: timeStr,
+                    aName: activeA.fpgs, az, dist, pp8: selectedPP8, td6b: selectedTD6B,
+                    pp8x: 0, td6bx: 0, confirmationTime: null, confirmationDate: null, marker: null
                 };
                 bPoints.push(row);
-                const popupInitial = `PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
                 const marker = L.marker([lat, lon], { icon: bIcon })
                     .addTo(bLayer)
-                    .bindPopup(popupInitial);
+                    .bindPopup(`PP8 ${row.pp8} TD6B ${row.td6b} B$${bCounter}<br>A: ${row.aName}<br>lat: ${lat}, lon: ${lon}<br>Vrijeme: ${timeStr}<br>Azimut: ${az.toFixed(1)}°<br>Dist: ${dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`);
                 marker.on('mouseover', e => {
                     const prefix = row.confirmationTime ? 'B#' : 'B$';
                     showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
@@ -1713,40 +1600,27 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 recomputeRocketStock();
             }
 
-            // ================================================================
-            // B VISIBILITY, SECTORS, GRID (nepromijenjeno)
-            // ================================================================
             function updateBVisibility() {
                 if (!activeA) {
-                    bPoints.forEach(row => {
-                        if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); }
-                    });
+                    bPoints.forEach(row => { if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); } });
                     document.getElementById('bInACount').textContent = '0';
                     return;
                 }
                 const aSectors = sectorsByA[activeAKey];
                 if (!aSectors) {
-                    bPoints.forEach(row => {
-                        if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); }
-                    });
+                    bPoints.forEach(row => { if (row.marker) { row.marker.setIcon(bIcon); row.marker.setOpacity(1); } });
                     document.getElementById('bInACount').textContent = '0';
                     return;
                 }
                 const allPolys = [...aSectors.pp8, ...aSectors.pp6];
                 let insideCount = 0;
                 bPoints.forEach(row => {
-                    const lat = row.bLat, lon = row.bLon;
                     let inside = false;
-                    for (let poly of allPolys) {
-                        if (pointInPolygon(lat, lon, poly)) { inside = true; break; }
-                    }
+                    for (let poly of allPolys) if (pointInPolygon(row.bLat, row.bLon, poly)) { inside = true; break; }
                     if (inside) {
-                        row.marker.setIcon(bIcon);
-                        row.marker.setOpacity(1);
-                        insideCount++;
+                        row.marker.setIcon(bIcon); row.marker.setOpacity(1); insideCount++;
                     } else {
-                        row.marker.setIcon(bIconGray);
-                        row.marker.setOpacity(0.5);
+                        row.marker.setIcon(bIconGray); row.marker.setOpacity(0.5);
                     }
                 });
                 document.getElementById('bInACount').textContent = insideCount;
@@ -1779,7 +1653,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // GRID (nepromijenjeno)
+            // GRID – PORAVNATO SA GEOGRAFSKOM MREŽOM
+            //   16°00'–20°00' E (16 kolona × 15')
+            //   42°30'–45°20' N (17 redova × 10')
             // ================================================================
             const gridLayer = L.layerGroup().addTo(map);
 
@@ -1787,9 +1663,25 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 if (!firebaseInitialized || !canEditGrid() || !gridColorsRef) return;
                 const data = {
                     greenCells: greenCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
-                    blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
+                    blueCells: blueCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax })),
+                    redCells: redCells.map(c => ({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }))
                 };
                 gridColorsRef.set(data).catch(err => console.warn('Firebase write error:', err));
+            }
+
+            function applyGridStyles() {
+                gridCells.forEach(rect => {
+                    const latMin = rect._latMin, latMax = rect._latMax;
+                    const lonMin = rect._lonMin, lonMax = rect._lonMax;
+                    const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax);
+                    const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax);
+                    const isRed = redCells.some(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax);
+                    let color = 'black', weight = 2;
+                    if (isGreen) { color = '#00ff00'; weight = 4; }
+                    else if (isBlue) { color = '#0055ff'; weight = 4; }
+                    else if (isRed) { color = '#ff0000'; weight = 4; }
+                    rect.setStyle({ color, weight, opacity: 1 });
+                });
             }
 
             function loadGridColorsFromFirebase() {
@@ -1797,38 +1689,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 gridColorsRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data) {
-                        if (data.greenCells) {
-                            data.greenCells.forEach(c => {
-                                if (!greenCells.some(g => g.latMin === c.latMin && g.latMax === c.latMax &&
-                                        g.lonMin === c.lonMin && g.lonMax === c.lonMax)) {
-                                    greenCells.push(c);
-                                }
-                            });
-                        }
-                        if (data.blueCells) {
-                            data.blueCells.forEach(c => {
-                                if (!blueCells.some(b => b.latMin === c.latMin && b.latMax === c.latMax &&
-                                        b.lonMin === c.lonMin && b.lonMax === c.lonMax)) {
-                                    blueCells.push(c);
-                                }
-                            });
-                        }
-                        gridCells.forEach(rect => {
-                            const bounds = rect.getBounds();
-                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
-                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
-                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            rect.setStyle({
-                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
-                                weight: isGreen || isBlue ? 3 : 2
-                            });
-                        });
-                        console.log('Grid boje učitane iz Firebase.');
+                        if (data.greenCells) data.greenCells.forEach(c => { if (!greenCells.some(g => g.latMin === c.latMin && g.latMax === c.latMax && g.lonMin === c.lonMin && g.lonMax === c.lonMax)) greenCells.push(c); });
+                        if (data.blueCells) data.blueCells.forEach(c => { if (!blueCells.some(b => b.latMin === c.latMin && b.latMax === c.latMax && b.lonMin === c.lonMin && b.lonMax === c.lonMax)) blueCells.push(c); });
+                        if (data.redCells) data.redCells.forEach(c => { if (!redCells.some(r => r.latMin === c.latMin && r.latMax === c.latMax && r.lonMin === c.lonMin && r.lonMax === c.lonMax)) redCells.push(c); });
+                        applyGridStyles();
                     }
-                }).catch(err => console.warn('Firebase read error:', err));
+                });
             }
 
             function listenGridColors() {
@@ -1838,170 +1704,120 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 gridColorsListener.on('value', snapshot => {
                     const data = snapshot.val();
                     if (data) {
-                        greenCells = [];
-                        blueCells = [];
-                        if (data.greenCells) {
-                            data.greenCells.forEach(c => {
-                                greenCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
-                            });
-                        }
-                        if (data.blueCells) {
-                            data.blueCells.forEach(c => {
-                                blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax });
-                            });
-                        }
-                        gridCells.forEach(rect => {
-                            const bounds = rect.getBounds();
-                            const latMin = bounds.getSouth(), latMax = bounds.getNorth(),
-                                  lonMin = bounds.getWest(), lonMax = bounds.getEast();
-                            const isGreen = greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            const isBlue = blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            rect.setStyle({
-                                color: isGreen ? '#00ff00' : isBlue ? '#0055ff' : 'black',
-                                weight: isGreen || isBlue ? 3 : 2
-                            });
-                        });
-                        statusDiv.textContent = '🔥 Sinhronizovane boje kvadrata';
-                        statusDiv.style.display = 'block';
-                        setTimeout(() => statusDiv.style.display = 'none', 1000);
+                        greenCells = []; blueCells = []; redCells = [];
+                        if (data.greenCells) data.greenCells.forEach(c => greenCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }));
+                        if (data.blueCells) data.blueCells.forEach(c => blueCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }));
+                        if (data.redCells) data.redCells.forEach(c => redCells.push({ latMin: c.latMin, latMax: c.latMax, lonMin: c.lonMin, lonMax: c.lonMax }));
+                        applyGridStyles();
                     }
                 });
             }
 
             function generateGrid() {
-                const latStart = 42.2, latEnd = 45.3 + 10/60, latStep = 10/60;
-                const lonStart = 16, lonEnd = 20 + 15/60, lonStep = 15/60;
-                let redIndex = 0;
-                for (let lat = latStart; lat < latEnd; lat += latStep) {
-                    let stupacIndex = 0;
-                    for (let lon = lonStart; lon < lonEnd; lon += lonStep) {
-                        const bounds = [[lat, lon], [lat + latStep, lon + lonStep]];
-                        const rect = L.rectangle(bounds, { color: 'black', weight: 2, fillOpacity: 0, interactive: true });
-                        const latMin = lat, latMax = lat + latStep, lonMin = lon, lonMax = lon + lonStep;
-                        const redBroj = 29 - redIndex;
-                        const slovoCode = 68 + stupacIndex + (stupacIndex >= 13 ? 1 : 0);
-                        const slovo = String.fromCharCode(slovoCode);
+                // PORAVNATO SA GEOGRAFSKOM MREŽOM
+                const latStart = 42 + 30/60;   // 42°30' N
+                const latEnd   = 45 + 20/60;   // 45°20' N
+                const latStep  = 10/60;        // 10'
+
+                const lonStart = 16.0;         // 16°00' E
+                const lonEnd   = 20.0;         // 20°00' E
+                const lonStep  = 15/60;        // 15'
+
+                const nLatRows = Math.round((latEnd - latStart) / latStep); // 17
+                const nLonCols = Math.round((lonEnd - lonStart) / lonStep); // 16
+                const STEPS = 12;
+
+                for (let i = 0; i < nLatRows; i++) {
+                    const latMin = latStart + i * latStep;
+                    const latMax = latMin + latStep;
+                    // Redni broj od dna prema gore: 29, 28, ..., 13
+                    const redBroj = 29 - i;
+
+                    for (let j = 0; j < nLonCols; j++) {
+                        const lonMin = lonStart + j * lonStep;
+                        const lonMax = lonMin + lonStep;
+
+                        // Zakrivljene ivice (12 segmenata po strani)
+                        const ring = [];
+                        for (let k = 0; k <= STEPS; k++) ring.push([latMax, lonMin + (lonMax - lonMin) * k / STEPS]);
+                        for (let k = 1; k <= STEPS; k++) ring.push([latMax - (latMax - latMin) * k / STEPS, lonMax]);
+                        for (let k = 1; k <= STEPS; k++) ring.push([latMin, lonMax - (lonMax - lonMin) * k / STEPS]);
+                        for (let k = 1; k < STEPS; k++) ring.push([latMin + (latMax - latMin) * k / STEPS, lonMin]);
+
+                        const rect = L.polygon(ring, { color: 'black', weight: 2, opacity: 1, fillOpacity: 0, interactive: true });
+                        rect._latMin = latMin; rect._latMax = latMax;
+                        rect._lonMin = lonMin; rect._lonMax = lonMax;
+
+                        // Slovo: A..H, J..Q (preskače se I)
+                        const slovo = String.fromCharCode(65 + j + (j >= 8 ? 1 : 0));
                         const id = slovo + redBroj;
+
                         rect.on('mouseover', e => showHoverTooltip('ID: ' + id, e.latlng));
                         rect.on('mouseout', () => hideHoverTooltip());
+
                         rect.on('click', function(e) {
-                            if (!canEditGrid()) {
-                                alert('⚠️ Samo vlasnik ili urednik kvadrata može mijenjati boje.');
-                                return;
-                            }
+                            if (!canEditGrid()) { alert('⚠️ Samo vlasnik ili urednik kvadrata može mijenjati boje.'); return; }
                             if (selectedGridColor) {
-                                let color = selectedGridColor === 'green' ? '#00ff00' :
-                                            selectedGridColor === 'blue' ? '#0055ff' : '#ff0000';
-                                this.setStyle({ color, weight: 3 });
-                                if (selectedGridColor === 'green') {
-                                    if (!greenCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                            c.lonMin === lonMin && c.lonMax === lonMax))
-                                        greenCells.push({ latMin, latMax, lonMin, lonMax });
-                                    const idx = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idx !== -1) blueCells.splice(idx, 1);
-                                } else if (selectedGridColor === 'blue') {
-                                    if (!blueCells.some(c => c.latMin === latMin && c.latMax === latMax &&
-                                            c.lonMin === lonMin && c.lonMax === lonMax))
-                                        blueCells.push({ latMin, latMax, lonMin, lonMax });
-                                    const idx = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idx !== -1) greenCells.splice(idx, 1);
-                                } else { // red
-                                    const idxG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idxG !== -1) greenCells.splice(idxG, 1);
-                                    const idxB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                        c.lonMin === lonMin && c.lonMax === lonMax);
-                                    if (idxB !== -1) blueCells.splice(idxB, 1);
-                                }
+                                let iG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iG !== -1) greenCells.splice(iG, 1);
+                                let iB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iB !== -1) blueCells.splice(iB, 1);
+                                let iR = redCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iR !== -1) redCells.splice(iR, 1);
+                                let color;
+                                if (selectedGridColor === 'green') { greenCells.push({ latMin, latMax, lonMin, lonMax }); color = '#00ff00'; }
+                                else if (selectedGridColor === 'blue') { blueCells.push({ latMin, latMax, lonMin, lonMax }); color = '#0055ff'; }
+                                else if (selectedGridColor === 'red') { redCells.push({ latMin, latMax, lonMin, lonMax }); color = '#ff0000'; }
+                                else return;
+                                this.setStyle({ color, weight: 4, opacity: 1 });
                                 saveGridColorsToFirebase();
                                 L.DomEvent.stopPropagation(e);
                             }
                         });
+
                         rect.on('contextmenu', function(e) {
-                            if (!canEditGrid()) {
-                                alert('⚠️ Samo vlasnik ili urednik kvadrata može brisati boje.');
-                                return;
-                            }
-                            this.setStyle({ color: 'black', weight: 2 });
-                            const idxG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            if (idxG !== -1) greenCells.splice(idxG, 1);
-                            const idxB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax &&
-                                c.lonMin === lonMin && c.lonMax === lonMax);
-                            if (idxB !== -1) blueCells.splice(idxB, 1);
+                            if (!canEditGrid()) return;
+                            this.setStyle({ color: 'black', weight: 2, opacity: 1 });
+                            let iG = greenCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iG !== -1) greenCells.splice(iG, 1);
+                            let iB = blueCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iB !== -1) blueCells.splice(iB, 1);
+                            let iR = redCells.findIndex(c => c.latMin === latMin && c.latMax === latMax && c.lonMin === lonMin && c.lonMax === lonMax); if (iR !== -1) redCells.splice(iR, 1);
                             saveGridColorsToFirebase();
                             L.DomEvent.stopPropagation(e);
                             L.DomEvent.preventDefault(e);
                         });
+
                         rect.addTo(gridLayer);
                         gridCells.push(rect);
-                        stupacIndex++;
                     }
-                    redIndex++;
                 }
             }
             generateGrid();
 
-            // ================================================================
-            // 📡 LISTENER ZA CONFIRMATIONS – AŽURIRA bPoints I TABELU (ispravljeno)
-            // ================================================================
             function listenConfirmations() {
                 if (!firebaseInitialized) return;
-                const confirmRef = firebaseDb.ref('confirmations');
-                if (confirmationsListener) {
-                    confirmationsListener.off();
-                }
-                confirmationsListener = confirmRef;
+                if (confirmationsListener) confirmationsListener.off();
+                confirmationsListener = firebaseDb.ref('confirmations');
                 confirmationsListener.on('value', snapshot => {
-                    console.log('📡 Promjena u confirmations – ažuriram bPoints i tabelu.');
                     const data = snapshot.val();
-                    if (!data) {
-                        console.log('ℹ️ Nema potvrda u confirmations.');
-                        return;
-                    }
-                    const confirmations = Object.values(data);
+                    if (!data) return;
                     let updated = false;
-                    confirmations.forEach(c => {
+                    Object.values(data).forEach(c => {
                         const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
                         if (bPoint) {
-                            // Ažuriraj uvijek (čak i ako već ima potvrdu – osvježi podatke)
                             bPoint.pp8x = c.pp8x || 0;
                             bPoint.td6bx = c.td6bx || 0;
                             bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
                             bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
-                            // Ažuriraj popup markera
                             if (bPoint.marker) {
-                                const popupContent = `PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`;
-                                bPoint.marker.setPopupContent(popupContent);
+                                bPoint.marker.setPopupContent(`PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`);
                             }
                             updated = true;
-                            console.log(`✅ Ažurirana B tačka #${bPoint.bIndex} sa potvrdom: PP8X=${bPoint.pp8x}, TD6BX=${bPoint.td6bx}`);
-                        } else {
-                            console.warn(`⚠️ B tačka sa bIndex ${c.bIndex} nije pronađena u bPoints.`);
                         }
                     });
                     if (updated) {
-                        // Ponovo izračunaj stanje raketa
                         recomputeRocketStock();
-                        // Ako je tabela otvorena, osvježi je
-                        if (tableOverlay.style.display === 'block') {
-                            renderTable();
-                            console.log('📊 Tabela osvježena.');
-                        }
-                        statusDiv.textContent = '✅ Tabela ažurirana sa novim potvrdama';
-                        statusDiv.style.display = 'block';
-                        setTimeout(() => statusDiv.style.display = 'none', 2000);
+                        if (tableOverlay.style.display === 'block') renderTable();
                     }
                 });
             }
 
-            // ================================================================
-            // LISTENERI ZA B TAČKE (Firebase)
-            // ================================================================
             function loadBPointsFromFirebase() {
                 if (!firebaseInitialized || !bPointsRef) return;
                 bPointsRef.once('value').then(snapshot => {
@@ -2014,29 +1830,21 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                             bCounter++;
                             const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
                             const row = {
-                                bIndex: rowData.bIndex || bCounter,
-                                bLat: rowData.bLat,
-                                bLon: rowData.bLon,
-                                bDate: now,
-                                bTime: rowData.bTime || now.toLocaleString(),
-                                aName: rowData.aName || '',
-                                az: rowData.az || 0,
-                                dist: rowData.dist || 0,
-                                pp8: rowData.pp8 || 0,
-                                td6b: rowData.td6b || 0,
-                                pp8x: rowData.pp8x || 0,
-                                td6bx: rowData.td6bx || 0,
+                                bIndex: rowData.bIndex || bCounter, bLat: rowData.bLat, bLon: rowData.bLon,
+                                bDate: now, bTime: rowData.bTime || now.toLocaleString(),
+                                aName: rowData.aName || '', az: rowData.az || 0, dist: rowData.dist || 0,
+                                pp8: rowData.pp8 || 0, td6b: rowData.td6b || 0,
+                                pp8x: rowData.pp8x || 0, td6bx: rowData.td6bx || 0,
                                 confirmationTime: rowData.confirmationTime || null,
                                 confirmationDate: rowData.confirmationDate ? new Date(rowData.confirmationDate) : null,
                                 marker: null
                             };
                             bPoints.push(row);
-                            const popupContent = row.confirmationTime ?
-                                `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}` :
-                                `PP8 ${row.pp8} TD6B ${row.td6b} B$${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
                             const marker = L.marker([row.bLat, row.bLon], { icon: bIcon })
                                 .addTo(bLayer)
-                                .bindPopup(popupContent);
+                                .bindPopup(row.confirmationTime ?
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}` :
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`);
                             marker.on('mouseover', e => {
                                 const prefix = row.confirmationTime ? 'B#' : 'B$';
                                 showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
@@ -2066,9 +1874,8 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
                         recomputeRocketStock();
-                        console.log('B tačke učitane iz Firebase:', bPoints.length);
                     }
-                }).catch(err => console.warn('Firebase read error:', err));
+                });
             }
 
             function listenBPoints() {
@@ -2085,29 +1892,21 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                             bCounter++;
                             const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
                             const row = {
-                                bIndex: rowData.bIndex || bCounter,
-                                bLat: rowData.bLat,
-                                bLon: rowData.bLon,
-                                bDate: now,
-                                bTime: rowData.bTime || now.toLocaleString(),
-                                aName: rowData.aName || '',
-                                az: rowData.az || 0,
-                                dist: rowData.dist || 0,
-                                pp8: rowData.pp8 || 0,
-                                td6b: rowData.td6b || 0,
-                                pp8x: rowData.pp8x || 0,
-                                td6bx: rowData.td6bx || 0,
+                                bIndex: rowData.bIndex || bCounter, bLat: rowData.bLat, bLon: rowData.bLon,
+                                bDate: now, bTime: rowData.bTime || now.toLocaleString(),
+                                aName: rowData.aName || '', az: rowData.az || 0, dist: rowData.dist || 0,
+                                pp8: rowData.pp8 || 0, td6b: rowData.td6b || 0,
+                                pp8x: rowData.pp8x || 0, td6bx: rowData.td6bx || 0,
                                 confirmationTime: rowData.confirmationTime || null,
                                 confirmationDate: rowData.confirmationDate ? new Date(rowData.confirmationDate) : null,
                                 marker: null
                             };
                             bPoints.push(row);
-                            const popupContent = row.confirmationTime ?
-                                `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}` :
-                                `PP8 ${row.pp8} TD6B ${row.td6b} B$${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`;
                             const marker = L.marker([row.bLat, row.bLon], { icon: bIcon })
                                 .addTo(bLayer)
-                                .bindPopup(popupContent);
+                                .bindPopup(row.confirmationTime ?
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B#${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: ${row.pp8x}, TD6BX: ${row.td6bx}<br>Potvrda: ${row.confirmationTime}` :
+                                    `PP8 ${row.pp8} TD6B ${row.td6b} B$${row.bIndex}<br>A: ${row.aName}<br>lat: ${row.bLat}, lon: ${row.bLon}<br>Vrijeme: ${row.bTime}<br>Azimut: ${row.az.toFixed(1)}°<br>Dist: ${row.dist.toFixed(1)} km<br>PP8X: -, TD6BX: -<br>Potvrda: -`);
                             marker.on('mouseover', e => {
                                 const prefix = row.confirmationTime ? 'B#' : 'B$';
                                 showHoverTooltip(`${prefix}${row.bIndex}  PP8:${row.pp8}  TD6B:${row.td6b}`, e.latlng);
@@ -2137,17 +1936,10 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
                         recomputeRocketStock();
-                        statusDiv.textContent = '🔥 Sinhronizovane B tačke i stanje raketa';
-                        statusDiv.style.display = 'block';
-                        setTimeout(() => statusDiv.style.display = 'none', 1000);
-                        console.log('B tačke ažurirane iz Firebase (real-time):', bPoints.length);
                     }
                 });
             }
 
-            // ================================================================
-            // TABELA A-B
-            // ================================================================
             function buildTableData() {
                 return bPoints.map(row => ({
                     'B redni': row.bIndex,
@@ -2167,10 +1959,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
 
             function renderTable() {
                 const data = buildTableData();
-                if (data.length === 0) {
-                    tableWrapper.innerHTML = '<p>Nema podataka. Dodajte B klikom na mapu (nakon odabira A).</p>';
-                    return;
-                }
+                if (data.length === 0) { tableWrapper.innerHTML = '<p>Nema podataka.</p>'; return; }
                 let html = '<table><thead><tr>';
                 const headers = Object.keys(data[0]);
                 headers.forEach(h => html += `<th>${h}</th>`);
@@ -2184,35 +1973,19 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 tableWrapper.innerHTML = html;
             }
 
-            // ================================================================
-            // DUGME ZA POTVRDE – loadConfirmations()
-            // ================================================================
             function loadConfirmations() {
-                if (!isOwner()) {
-                    alert('⚠️ Samo vlasnik može vidjeti potvrde.');
-                    return;
-                }
-                if (!firebaseInitialized) {
-                    alert('🔥 Firebase nije inicijalizovan.');
-                    return;
-                }
-                const confirmRef = firebaseDb.ref('confirmations');
-                confirmRef.once('value').then(snapshot => {
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
+                if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
+                firebaseDb.ref('confirmations').once('value').then(snapshot => {
                     const data = snapshot.val();
-                    if (!data) {
-                        alert('ℹ️ Nema potvrda u bazi.');
-                        return;
-                    }
+                    if (!data) { alert('ℹ️ Nema potvrda.'); return; }
                     const confirmations = Object.values(data);
-                    if (confirmations.length === 0) {
-                        alert('ℹ️ Nema potvrda.');
-                        return;
-                    }
+                    if (confirmations.length === 0) { alert('ℹ️ Nema potvrda.'); return; }
                     confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
 
                     let html = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;">';
                     html += '<div style="background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);">';
-                    html += '<h3 style="margin-top:0;">📋 Potvrde (sve)</h3>';
+                    html += '<h3>📋 Potvrde</h3>';
                     html += '<button onclick="this.closest(\'div[style*=\'position:fixed\']\').remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
                     html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
                     html += '<thead><tr><th>B redni</th><th>A naziv</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
@@ -2223,25 +1996,15 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         const aName = bPoint ? bPoint.aName : '-';
                         html += `<tr><td>${c.bIndex}</td><td>${aName}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
                     });
-                    html += '</tbody></table>';
-                    html += '</div></div>';
-
+                    html += '</tbody></table></div></div>';
                     const modalContainer = document.createElement('div');
                     modalContainer.innerHTML = html;
                     const modalElement = modalContainer.firstElementChild;
                     document.body.appendChild(modalElement);
-
-                    modalElement.addEventListener('click', function(e) {
-                        if (e.target === this) {
-                            this.remove();
-                        }
-                    });
-                }).catch(err => alert('❌ Greška pri učitavanju potvrda:\n' + err.message));
+                    modalElement.addEventListener('click', function(e) { if (e.target === this) this.remove(); });
+                });
             }
 
-            // ================================================================
-            // TOOLTIP I AZIMUT
-            // ================================================================
             function showHoverTooltip(text, latlng) {
                 hoverTooltip.textContent = text;
                 hoverTooltip.style.display = 'block';
@@ -2261,19 +2024,13 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     const sizeStr = currentKmzSize ? (currentKmzSize / 1024).toFixed(1) + ' KB' : '';
                     html += `📄 ${currentKmzName}${dateStr ? '  ' + dateStr : ''}${sizeStr ? '  (' + sizeStr + ')' : ''}<br>`;
                 }
-                if (!activeA) {
-                    html += 'Nema aktivnog A<br>Kliknite na A marker';
-                    mouseAzimuthDiv.innerHTML = html;
-                    return;
-                }
+                if (!activeA) { html += 'Nema aktivnog A<br>Kliknite na A marker'; mouseAzimuthDiv.innerHTML = html; return; }
                 const az = bearing(activeA.lat, activeA.lon, latlng.lat, latlng.lng);
                 const dist = haversine(activeA.lat, activeA.lon, latlng.lat, latlng.lng);
                 html += `Azimut od A (${activeA.fpgs}): ${az.toFixed(1)}°<br>Udaljenost: ${dist.toFixed(1)} km`;
                 if (hoveringBRow) html += `<br>PP8: ${hoveringBRow.pp8}  TD6B: ${hoveringBRow.td6b}`;
                 const stock = rocketStock[activeA.fpgs];
-                if (stock) {
-                    html += `<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`;
-                }
+                if (stock) html += `<br>🚀 PP8: ${stock.pp8}, TD6B: ${stock.td6b}`;
                 if (pngOverlay && pngVisible && pngImgWidth && pngImgHeight) {
                     const [latMin, lonMin] = PNG_BOUNDS[0];
                     const [latMax, lonMax] = PNG_BOUNDS[1];
@@ -2300,9 +2057,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 addBPoint(e.latlng.lat, e.latlng.lng);
             });
 
-            // ================================================================
-            // EVENTI DUGMADI
-            // ================================================================
             document.getElementById('toggleSectorsBtn').addEventListener('click', function() {
                 sectorsVisible = !sectorsVisible;
                 this.textContent = sectorsVisible ? '📐' : '📐🚫';
@@ -2322,91 +2076,62 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             const toggleABtn = document.getElementById('toggleABtn');
             let aVisible = true;
             toggleABtn.addEventListener('click', function() {
-                if (aVisible) {
-                    map.removeLayer(markerLayer);
-                    aVisible = false;
-                    this.className = 'a-off';
-                    this.title = 'Prikaži sve A tačke';
-                } else {
-                    map.addLayer(markerLayer);
-                    aVisible = true;
-                    this.className = 'a-on';
-                    this.title = 'Sakrij sve A tačke';
-                }
+                if (aVisible) { map.removeLayer(markerLayer); aVisible = false; this.className = 'a-off'; }
+                else { map.addLayer(markerLayer); aVisible = true; this.className = 'a-on'; }
             });
 
             document.getElementById('showTableBtn').addEventListener('click', function() {
-                if (tableOverlay.style.display === 'block') {
-                    tableOverlay.style.display = 'none';
-                } else {
-                    tableOverlay.style.display = 'block';
-                    renderTable();
-                }
+                if (tableOverlay.style.display === 'block') tableOverlay.style.display = 'none';
+                else { tableOverlay.style.display = 'block'; renderTable(); }
             });
 
             document.getElementById('openTableTabBtn').addEventListener('click', function() {
                 const data = buildTableData();
-                if (data.length === 0) { alert('❌ Nema podataka za prikaz.'); return; }
+                if (data.length === 0) { alert('❌ Nema podataka.'); return; }
                 let html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tabela A-B</title>';
                 html += '<style>body{font-family:sans-serif;padding:15px;max-width:70%;margin:0 auto;background:#f9f9f9;}';
-                html += 'table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;box-shadow:0 0 10px rgba(0,0,0,0.1);}';
-                html += 'th,td{border:1px solid #ccc;padding:6px 8px;text-align:center;vertical-align:middle;}';
-                html += 'th{background:#f0f0f0;position:sticky;top:0;}tr:nth-child(even){background:#fafafa;}tr:hover{background:#eef4ff;}</style></head><body>';
-                html += '<h2>Presjek A-B (PP8, PP8X, TD6B, TD6BX)</h2>';
-                html += '<table><thead><tr>';
+                html += 'table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;}';
+                html += 'th,td{border:1px solid #ccc;padding:6px 8px;text-align:center;}';
+                html += 'th{background:#f0f0f0;}</style></head><body>';
+                html += '<h2>Presjek A-B</h2><table><thead><tr>';
                 const headers = Object.keys(data[0]);
                 headers.forEach(h => html += `<th>${h}</th>`);
                 html += '</tr></thead><tbody>';
-                data.forEach(row => {
-                    html += '<tr>';
-                    headers.forEach(h => html += `<td>${row[h]}</td>`);
-                    html += '</tr>';
-                });
+                data.forEach(row => { html += '<tr>'; headers.forEach(h => html += `<td>${row[h]}</td>`); html += '</tr>'; });
                 html += '</tbody></table></body></html>';
                 const newWindow = window.open('', '_blank');
                 if (newWindow) { newWindow.document.write(html); newWindow.document.close(); }
-                else alert('❌ Iskačući prozor je blokiran.');
             });
 
-            document.getElementById('closeTableBtn').addEventListener('click', function() {
-                tableOverlay.style.display = 'none';
-            });
+            document.getElementById('closeTableBtn').addEventListener('click', function() { tableOverlay.style.display = 'none'; });
 
             document.getElementById('exportExcelBtn').addEventListener('click', function() {
                 const data = buildTableData();
-                if (data.length === 0) { alert('❌ Nema podataka za export.'); return; }
+                if (data.length === 0) { alert('❌ Nema podataka.'); return; }
                 try {
                     const ws = XLSX.utils.json_to_sheet(data);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, 'Presjek');
                     const now = new Date();
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth()+1).padStart(2,'0');
-                    const day = String(now.getDate()).padStart(2,'0');
-                    const hours = String(now.getHours()).padStart(2,'0');
-                    const minutes = String(now.getMinutes()).padStart(2,'0');
-                    const seconds = String(now.getSeconds()).padStart(2,'0');
-                    const fileName = `presjek_AB_${year}${month}${day}_${hours}${minutes}${seconds}.xlsx`;
+                    const fileName = `presjek_AB_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}.xlsx`;
                     XLSX.writeFile(wb, fileName);
-                    alert('✅ Excel fajl uspješno sačuvan:\n' + fileName);
-                } catch (e) { alert('❌ Greška pri exportu:\n' + e.message); }
+                    alert('✅ Excel sačuvan:\n' + fileName);
+                } catch (e) { alert('❌ Greška: ' + e.message); }
             });
 
-            document.getElementById('showConfirmationsBtn').addEventListener('click', function() {
-                loadConfirmations();
-            });
+            document.getElementById('showConfirmationsBtn').addEventListener('click', loadConfirmations);
 
             document.getElementById('clearBbtn').addEventListener('click', function() {
-                if (!isOwner()) { alert('⚠️ Samo vlasnik može obrisati sve B tačke.'); return; }
-                if (bPoints.length === 0) { alert('ℹ️ Nema tačaka B za brisanje.'); return; }
-                if (!confirm(`⚠️ Obrisati svih ${bPoints.length} tačaka B?`)) return;
+                if (!isOwner()) { alert('⚠️ Samo vlasnik.'); return; }
+                if (bPoints.length === 0) { alert('ℹ️ Nema B tačaka.'); return; }
+                if (!confirm(`⚠️ Obrisati svih ${bPoints.length} B tačaka?`)) return;
                 clearBPoints();
-                alert('✅ Sve B tačke su obrisane.');
+                alert('✅ Obrisano.');
             });
 
             const deleteBtn = document.getElementById('deleteSelectedB');
             deleteBtn.addEventListener('click', function() {
-                if (!isOwner()) { alert('⚠️ Samo vlasnik može brisati B tačke.'); return; }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik.'); return; }
                 deleteMode = !deleteMode;
                 this.classList.toggle('delete-mode');
                 this.textContent = deleteMode ? '❌B (aktivan)' : '❌B';
@@ -2414,10 +2139,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
 
             ['gridBlue','gridGreen','gridRed'].forEach(id => {
                 document.getElementById(id).addEventListener('click', function() {
-                    if (!canEditGrid()) {
-                        alert('⚠️ Samo vlasnik ili urednik kvadrata može mijenjati boje.');
-                        return;
-                    }
+                    if (!canEditGrid()) { alert('⚠️ Samo vlasnik ili urednik kvadrata.'); return; }
                     const color = id === 'gridBlue' ? 'blue' : id === 'gridGreen' ? 'green' : 'red';
                     if (this.classList.contains('active')) {
                         this.classList.remove('active');
@@ -2433,13 +2155,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             });
 
             document.getElementById('gridReset').addEventListener('click', function() {
-                if (!canEditGrid()) {
-                    alert('⚠️ Samo vlasnik ili urednik kvadrata može resetovati boje.');
-                    return;
-                }
-                gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2 }));
-                greenCells = [];
-                blueCells = [];
+                if (!canEditGrid()) { alert('⚠️ Samo vlasnik ili urednik kvadrata.'); return; }
+                gridCells.forEach(rect => rect.setStyle({ color: 'black', weight: 2, opacity: 1 }));
+                greenCells = []; blueCells = []; redCells = [];
                 saveGridColorsToFirebase();
             });
 
@@ -2470,235 +2188,112 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             setupDropdown('td6bDropdownBtn', 'td6bDropdownContent', v => selectedTD6B = v);
             setupDropdown('td6bxDropdownBtn', 'td6bxDropdownContent', v => selectedTD6BX = v);
 
-            // ================================================================
-            // 📁 UCITAJ KMZ (ručno)
-            // ================================================================
             const loadKmzBtn = document.getElementById('loadKmzBtn');
             const fileInput = document.getElementById('fileInput');
-
-            loadKmzBtn.addEventListener('click', function() {
-                fileInput.click();
-            });
-
+            loadKmzBtn.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = function(event) {
-                    const arrayBuffer = event.target.result;
-                    JSZip.loadAsync(arrayBuffer).then(function(zip) {
-                        let imageFile = null;
-                        let kmlFile = null;
-                        zip.forEach(function(relativePath, zipEntry) {
-                            if (zipEntry.name.match(/\.(png|jpg|jpeg)$/i)) {
-                                imageFile = zipEntry;
-                            } else if (zipEntry.name.match(/\.kml$/i)) {
-                                kmlFile = zipEntry;
-                            }
+                    JSZip.loadAsync(event.target.result).then(function(zip) {
+                        let imageFile = null, kmlFile = null;
+                        zip.forEach(function(relPath, zipEntry) {
+                            if (zipEntry.name.match(/\.(png|jpg|jpeg)$/i)) imageFile = zipEntry;
+                            else if (zipEntry.name.match(/\.kml$/i)) kmlFile = zipEntry;
                         });
-                        if (!imageFile) {
-                            alert('Nije pronađena slika u KMZ fajlu.');
-                            fileInput.value = '';
-                            return;
-                        }
+                        if (!imageFile) { alert('Nema slike.'); fileInput.value = ''; return; }
                         imageFile.async('blob').then(function(blob) {
                             const url = URL.createObjectURL(blob);
-
                             function addOverlay(bounds) {
-                                if (pngOverlay) {
-                                    map.removeLayer(pngOverlay);
-                                }
+                                if (pngOverlay) map.removeLayer(pngOverlay);
                                 pngOverlay = L.imageOverlay(url, bounds, { opacity: 0.7 }).addTo(map);
                                 pngVisible = true;
                                 document.getElementById('radarToggle').className = 'radar-on';
                                 document.getElementById('radarToggle').textContent = '🖼️ ON';
                                 fileInput.value = '';
                             }
-
                             if (kmlFile) {
-                                kmlFile.async('text').then(function(kmlText) {
+                                kmlFile.async('text').then(kmlText => {
                                     try {
-                                        const parser = new DOMParser();
-                                        const xml = parser.parseFromString(kmlText, 'text/xml');
-                                        const latLonBox = xml.querySelector('LatLonBox');
-                                        if (latLonBox) {
-                                            const north = parseFloat(latLonBox.querySelector('north').textContent);
-                                            const south = parseFloat(latLonBox.querySelector('south').textContent);
-                                            const east = parseFloat(latLonBox.querySelector('east').textContent);
-                                            const west = parseFloat(latLonBox.querySelector('west').textContent);
-                                            if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
-                                                addOverlay([[south, west], [north, east]]);
-                                                return;
-                                            }
+                                        const xml = new DOMParser().parseFromString(kmlText, 'text/xml');
+                                        const box = xml.querySelector('LatLonBox');
+                                        if (box) {
+                                            const n = parseFloat(box.querySelector('north').textContent);
+                                            const s = parseFloat(box.querySelector('south').textContent);
+                                            const ea = parseFloat(box.querySelector('east').textContent);
+                                            const w = parseFloat(box.querySelector('west').textContent);
+                                            if (!isNaN(n) && !isNaN(s) && !isNaN(ea) && !isNaN(w)) { addOverlay([[s, w], [n, ea]]); return; }
                                         }
-                                        const center = map.getCenter();
-                                        const half = 0.05;
-                                        addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
-                                    } catch (err) {
-                                        console.warn('Greška pri parsiranju KML:', err);
-                                        const center = map.getCenter();
-                                        const half = 0.05;
-                                        addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
-                                    }
-                                }).catch(function(err) {
-                                    console.warn('Greška pri čitanju KML:', err);
-                                    const center = map.getCenter();
-                                    const half = 0.05;
-                                    addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
+                                    } catch (err) {}
+                                    const c = map.getCenter();
+                                    addOverlay([[c.lat - 0.05, c.lng - 0.05], [c.lat + 0.05, c.lng + 0.05]]);
                                 });
                             } else {
-                                const center = map.getCenter();
-                                const half = 0.05;
-                                addOverlay([[center.lat - half, center.lng - half], [center.lat + half, center.lng + half]]);
+                                const c = map.getCenter();
+                                addOverlay([[c.lat - 0.05, c.lng - 0.05], [c.lat + 0.05, c.lng + 0.05]]);
                             }
-                        }).catch(function(err) {
-                            alert('Greška pri čitanju slike: ' + err.message);
-                            fileInput.value = '';
                         });
-                    }).catch(function(err) {
-                        alert('Greška pri otvaranju KMZ fajla: ' + err.message);
-                        fileInput.value = '';
-                    });
+                    }).catch(err => { alert('Greška: ' + err.message); fileInput.value = ''; });
                 };
                 reader.readAsArrayBuffer(file);
             });
 
-            // ================================================================
-            // 👁️ Radar toggle
-            // ================================================================
             document.getElementById('radarToggle').addEventListener('click', function() {
                 if (pngOverlay) {
-                    if (map.hasLayer(pngOverlay)) {
-                        map.removeLayer(pngOverlay);
-                        this.className = 'radar-off';
-                        this.textContent = '🖼️';
-                    } else {
-                        map.addLayer(pngOverlay);
-                        this.className = 'radar-on';
-                        this.textContent = '🖼️ ON';
-                    }
-                } else {
-                    alert('Prvo učitajte KMZ fajl.');
-                }
+                    if (map.hasLayer(pngOverlay)) { map.removeLayer(pngOverlay); this.className = 'radar-off'; this.textContent = '🖼️'; }
+                    else { map.addLayer(pngOverlay); this.className = 'radar-on'; this.textContent = '🖼️ ON'; }
+                } else alert('Nema KMZ.');
             });
 
-            // ================================================================
-            // 🌐 KOMUNIKACIJA SA NODE SERVEROM (auto-load + WebSocket)
-            // ================================================================
             async function loadFromServer(endpoint = '/api/latest-kmz-png') {
                 try {
-                    const response = await fetch(endpoint);
-                    const data = await response.json();
-                    if (data.error) {
-                        console.log('❌ Server greška:', data.error);
-                        return false;
-                    }
-                    if (!data.success) {
-                        console.log('❌ Neuspješno učitavanje:', data.error);
-                        return false;
-                    }
-
+                    const r = await fetch(endpoint);
+                    const data = await r.json();
+                    if (!data.success) return false;
                     currentKmzName = data.name;
                     currentKmzModified = data.modified;
                     currentKmzSize = data.size;
-
-                    const byteCharacters = atob(data.data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: data.mimeType || 'image/png' });
+                    const bc = atob(data.data);
+                    const bn = new Array(bc.length);
+                    for (let i = 0; i < bc.length; i++) bn[i] = bc.charCodeAt(i);
+                    const blob = new Blob([new Uint8Array(bn)], { type: 'image/png' });
                     const url = URL.createObjectURL(blob);
-
-                    const img = new Image();
-                    img.onload = function() {
-                        pngImgWidth = img.width;
-                        pngImgHeight = img.height;
-                        if (pngOverlay) map.removeLayer(pngOverlay);
-                        pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50, interactive: true })
-                            .addTo(map);
-                        pngVisible = true;
-                        document.getElementById('radarToggle').className = 'radar-on';
-                        document.getElementById('radarToggle').textContent = '🖼️ ON';
-                        statusDiv.textContent = `✅ Server: ${data.name} (${new Date(data.modified).toLocaleString()})`;
-                        statusDiv.style.display = 'block';
-                        setTimeout(() => statusDiv.style.display = 'none', 3000);
-                        if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
-                    };
-                    img.onerror = function() {
-                        if (pngOverlay) map.removeLayer(pngOverlay);
-                        pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50, interactive: true })
-                            .addTo(map);
-                        pngVisible = true;
-                        document.getElementById('radarToggle').className = 'radar-on';
-                        document.getElementById('radarToggle').textContent = '🖼️ ON';
-                        statusDiv.textContent = `✅ Server: ${data.name}`;
-                        statusDiv.style.display = 'block';
-                        setTimeout(() => statusDiv.style.display = 'none', 3000);
-                        if (lastMouseLatLng) updateMouseAzimuth(lastMouseLatLng);
-                    };
-                    img.src = url;
-
+                    if (pngOverlay) map.removeLayer(pngOverlay);
+                    pngOverlay = L.imageOverlay(url, PNG_BOUNDS, { opacity: 0.7, zIndex: 50 }).addTo(map);
+                    pngVisible = true;
+                    document.getElementById('radarToggle').className = 'radar-on';
+                    document.getElementById('radarToggle').textContent = '🖼️ ON';
+                    statusDiv.textContent = `✅ ${data.name}`;
+                    statusDiv.style.display = 'block';
+                    setTimeout(() => statusDiv.style.display = 'none', 3000);
                     return true;
-                } catch (error) {
-                    console.error('❌ Greška pri učitavanju sa servera:', error);
-                    return false;
-                }
+                } catch (e) { return false; }
             }
 
             function connectWebSocket() {
                 const ws = new WebSocket('ws://localhost:3000');
-
-                ws.onopen = function() {
-                    console.log('✅ WebSocket povezan sa serverom.');
-                    ws.send(JSON.stringify({ type: 'getLatestKmz' }));
-                };
-
-                ws.onmessage = function(event) {
+                ws.onopen = () => ws.send(JSON.stringify({ type: 'getLatestKmz' }));
+                ws.onmessage = (e) => {
                     try {
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'newKmz' || data.type === 'latestKmz' || data.type === 'refresh') {
-                            console.log('📡 Server javlja novi KMZ – osvježavam...');
-                            loadFromServer('/api/latest-kmz-png');
-                        } else if (data.type === 'connected') {
-                            console.log('🔗 Server potvrdio konekciju.');
-                        }
-                    } catch (e) {
-                        console.warn('Neispravna WebSocket poruka:', e);
-                    }
+                        const d = JSON.parse(e.data);
+                        if (d.type === 'newKmz' || d.type === 'latestKmz' || d.type === 'refresh') loadFromServer();
+                    } catch (err) {}
                 };
-
-                ws.onerror = function(err) {
-                    console.warn('⚠️ WebSocket greška:', err);
-                };
-
-                ws.onclose = function() {
-                    console.warn('⚠️ WebSocket zatvoren, pokušaj ponovnog povezivanja za 5s...');
-                    setTimeout(connectWebSocket, 5000);
-                };
-
+                ws.onclose = () => setTimeout(connectWebSocket, 5000);
                 return ws;
             }
 
-            const refreshBtn = document.getElementById('refreshBtn');
-            refreshBtn.addEventListener('click', async function() {
+            document.getElementById('refreshBtn').addEventListener('click', async function() {
                 this.disabled = true;
                 this.textContent = '⏳';
-                await loadFromServer('/api/latest-kmz-png');
+                await loadFromServer();
                 this.textContent = '🔄';
                 this.disabled = false;
             });
 
-            setTimeout(async () => {
-                await loadFromServer('/api/latest-kmz-png');
-                connectWebSocket();
-            }, 1500);
+            setTimeout(async () => { await loadFromServer(); connectWebSocket(); }, 1500);
 
-            // ================================================================
-            // FIREBASE LISTENERI (UKLJUČUJUĆI confirmations)
-            // ================================================================
             function startListening() {
                 if (!firebaseInitialized) return;
                 if (bPointsRef) listenBPoints();
@@ -2720,32 +2315,23 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         } else {
                             if (activeA) {
                                 activeA.marker.setIcon(aIcon);
-                                activeA = null;
-                                activeAKey = null;
+                                activeA = null; activeAKey = null;
                                 document.getElementById('activeAName').textContent = '-';
                                 filterByA = false;
-                                updateSectorsVisibility();
-                                updatePopups();
+                                updateSectorsVisibility(); updatePopups();
                             }
                         }
                     });
                 }
                 listenConfirmations();
-                console.log('📡 Slušanje Firebase podataka aktivirano (uključujući confirmations).');
             }
 
-            // ================================================================
-            // 🔐 AUTH STATE
-            // ================================================================
             if (auth) {
                 auth.onAuthStateChanged(user => {
                     if (user) {
                         currentUser = user;
                         loginOverlay.style.display = 'none';
-                        console.log('👤 Prijavljen:', user.email, 'UID:', user.uid);
-                        setTimeout(() => {
-                            updateOwnerUI();
-                        }, 300);
+                        setTimeout(updateOwnerUI, 300);
                         if (firebaseInitialized) {
                             bPointsRef = firebaseDb.ref('bPoints');
                             gridColorsRef = firebaseDb.ref('gridColors');
@@ -2759,9 +2345,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                             loginOverlay.style.display = 'none';
                             currentUser = null;
-                            setTimeout(() => {
-                                updateOwnerUI();
-                            }, 300);
+                            setTimeout(updateOwnerUI, 300);
                             if (firebaseInitialized) {
                                 bPointsRef = firebaseDb.ref('bPoints');
                                 gridColorsRef = firebaseDb.ref('gridColors');
@@ -2789,25 +2373,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     loadGridColorsFromFirebase();
                     listenGridColors();
                 }
-                setTimeout(() => {
-                    updateOwnerUI();
-                }, 300);
+                setTimeout(updateOwnerUI, 300);
             }
 
-            // ================================================================
-            // 🚀 POKRENI
-            // ================================================================
             updateSectorsVisibility();
-            console.log('✅ Planseta pokrenuta sa 3 uloge.');
-            console.log('👑 Vlasnik UID:', OWNER_UID);
-            console.log('✅ Potvrđivač UID:', CONFIRMER_UID);
-            console.log('🎨 Urednik kvadrata UID:', GRID_EDITOR_UID);
-            console.log('🌐 Server komunikacija aktivirana (auto-load KMZ/PNG).');
-            console.log('📏 Ograničenje udaljenosti B tačaka: 8 km.');
-            console.log('🚀 Praćenje stanja raketa uključeno (sinhronizacija preko confirmations).');
-            console.log('🔓 Bypass za localhost: automatski si vlasnik.');
-            console.log('📊 Tabela se automatski ažurira pri svakoj novoj potvrdi.');
-            console.log('🎨 B tačke izvan aktivnog A sektora imaju 30% tamniju sivu boju (#696969).');
+            console.log('✅ Planseta pokrenuta – grid poravnat sa geografskom mrežom (16°–20°E, 42°30′–45°20′N)');
+            console.log('📐 Grid: 16 kolona × 17 redova (15′ × 10′), identično kao graticule.');
         });
     </script>
 </body>
