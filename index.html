@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -869,7 +870,8 @@ PE03,4,3`;
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
             let confirmationsListener = null;
-            let confirmationsModalListener = null;   // za LIVE osvježavanje modala
+            let confirmationsModalListener = null;
+            let latestConfirmationsData = null;   // ← cache zadnjih potvrda iz Firebase
             let rocketStock = {};
 
             let currentKmzName = null, currentKmzModified = null, currentKmzSize = null;
@@ -1266,22 +1268,15 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         rocketStock[row.aName].td6b = Math.max(0, rocketStock[row.aName].td6b - (row.td6bx || 0));
                     }
                 });
-                if (firebaseInitialized) {
-                    firebaseDb.ref('confirmations').once('value').then(snapshot => {
-                        const data = snapshot.val();
-                        if (data) {
-                            Object.values(data).forEach(c => {
-                                const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                                if (!bPoint || !rocketStock[bPoint.aName]) return;
-                                // Filtriranje orphan potvrda
-                                const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
-                                const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
-                                if (bTimeMs && confMs && confMs < bTimeMs) return;
-                                rocketStock[bPoint.aName].pp8 = Math.max(0, rocketStock[bPoint.aName].pp8 - (c.pp8x || 0));
-                                rocketStock[bPoint.aName].td6b = Math.max(0, rocketStock[bPoint.aName].td6b - (c.td6bx || 0));
-                            });
-                        }
-                        updateARocketTooltips();
+                if (latestConfirmationsData) {
+                    Object.values(latestConfirmationsData).forEach(c => {
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        if (!bPoint || !rocketStock[bPoint.aName]) return;
+                        const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
+                        const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
+                        if (bTimeMs && confMs && confMs < bTimeMs) return;
+                        rocketStock[bPoint.aName].pp8 = Math.max(0, rocketStock[bPoint.aName].pp8 - (c.pp8x || 0));
+                        rocketStock[bPoint.aName].td6b = Math.max(0, rocketStock[bPoint.aName].td6b - (c.td6bx || 0));
                     });
                 }
                 updateARocketTooltips();
@@ -1487,14 +1482,21 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         if (tableOverlay.style.display === 'block') renderTable();
                     } else {
                         const confirmRef = firebaseDb.ref('confirmations').push();
+                        console.log('📤 Upisujem potvrdu u Firebase:', { bIndex: row.bIndex, pp8x, td6bx, by: currentUser ? currentUser.email : 'nepoznat' });
                         confirmRef.set({
                             bIndex: row.bIndex, pp8x, td6bx,
                             confirmationTime: confirmNow.toISOString(),
                             confirmedBy: currentUser ? currentUser.uid : 'unknown',
                             confirmedByEmail: currentUser ? currentUser.email : 'unknown'
-                        }).then(() => {
+                        })
+                        .then(() => {
+                            console.log('✅ Potvrda uspješno upisana u Firebase');
                             recomputeRocketStock();
                             if (tableOverlay.style.display === 'block') renderTable();
+                        })
+                        .catch(err => {
+                            console.error('❌ GREŠKA pri upisu potvrde:', err);
+                            alert('❌ Greška pri upisu potvrde u Firebase:\n' + err.message + '\n\nProvjeri Firebase Realtime Database security rules.');
                         });
                     }
                 }
@@ -1776,35 +1778,57 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             generateGrid();
 
             // ================================================================
-            // ⚡ LISTEN CONFIRMATIONS – sa filtrom za orphan potvrde
+            // 🔁 PRIMIJENI POTVRDE NA B TAČKE
+            //    Poziva se i kad stignu potvrde i kad se učitaju B tačke
+            // ================================================================
+            function applyConfirmationsToBPoints() {
+                if (!latestConfirmationsData) return false;
+                let updated = false;
+                Object.values(latestConfirmationsData).forEach(c => {
+                    const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                    if (!bPoint) return;
+
+                    // Orphan filter – preskoči potvrde stvorene PRIJE B tačke
+                    const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
+                    const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
+                    if (bTimeMs && confMs && confMs < bTimeMs) return;
+
+                    // Preskoči ako je već primijenjeno (isti timestamp)
+                    const confTimeStr = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
+                    if (bPoint.confirmationTime && bPoint.confirmationTime === confTimeStr) return;
+
+                    bPoint.pp8x = c.pp8x || 0;
+                    bPoint.td6bx = c.td6bx || 0;
+                    bPoint.confirmationTime = confTimeStr;
+                    bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
+
+                    if (bPoint.marker) {
+                        bPoint.marker.setPopupContent(
+                            `PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>` +
+                            `A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>` +
+                            `Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>` +
+                            `Dist: ${bPoint.dist.toFixed(1)} km<br>` +
+                            `PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>` +
+                            `Potvrda: ${bPoint.confirmationTime}`
+                        );
+                    }
+                    console.log(`✅ Primijenjena potvrda na B#${bPoint.bIndex} (aName: ${bPoint.aName}, pp8x: ${bPoint.pp8x}, td6bx: ${bPoint.td6bx})`);
+                    updated = true;
+                });
+                return updated;
+            }
+
+            // ================================================================
+            // ⚡ LISTEN CONFIRMATIONS – čuva cache i poziva apply
             // ================================================================
             function listenConfirmations() {
                 if (!firebaseInitialized) return;
                 if (confirmationsListener) confirmationsListener.off();
                 confirmationsListener = firebaseDb.ref('confirmations');
                 confirmationsListener.on('value', snapshot => {
-                    const data = snapshot.val();
-                    if (!data) return;
-                    let updated = false;
-                    Object.values(data).forEach(c => {
-                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                        if (!bPoint) return;
-
-                        // ⛔ IGNORIŠI ORPHAN POTVRDE – potvrde stvorene PRIJE B tačke
-                        const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
-                        const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
-                        if (bTimeMs && confMs && confMs < bTimeMs) return;   // preskoči staru potvrdu
-
-                        bPoint.pp8x = c.pp8x || 0;
-                        bPoint.td6bx = c.td6bx || 0;
-                        bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
-                        bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
-                        if (bPoint.marker) {
-                            bPoint.marker.setPopupContent(`PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`);
-                        }
-                        updated = true;
-                    });
-                    if (updated) {
+                    latestConfirmationsData = snapshot.val();
+                    console.log('🔔 Firebase confirmations update:', latestConfirmationsData);
+                    if (applyConfirmationsToBPoints()) {
                         recomputeRocketStock();
                         if (tableOverlay.style.display === 'block') renderTable();
                     }
@@ -1812,7 +1836,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // 📥 LOAD B POINTS – sa bCounter = max(bIndex), ne count
+            // 📥 LOAD B POINTS – sa bCounter = max(bIndex) + apply potvrda
             // ================================================================
             function loadBPointsFromFirebase() {
                 if (!firebaseInitialized || !bPointsRef) return;
@@ -1825,7 +1849,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         data.forEach(rowData => {
                             let idx = parseInt(rowData.bIndex) || 0;
                             if (idx <= 0) idx = bCounter + 1;
-                            if (idx > bCounter) bCounter = idx;   // ← MAX, ne count
+                            if (idx > bCounter) bCounter = idx;   // MAX, ne count
 
                             const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
                             const row = {
@@ -1872,13 +1896,14 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         updatePopups();
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
+                        applyConfirmationsToBPoints();   // ← primijeni potvrde
                         recomputeRocketStock();
                     }
                 });
             }
 
             // ================================================================
-            // 📥 LISTEN B POINTS – sa bCounter = max(bIndex), ne count
+            // 📥 LISTEN B POINTS – sa bCounter = max(bIndex) + apply potvrda
             // ================================================================
             function listenBPoints() {
                 if (!firebaseInitialized || !bPointsRef) return;
@@ -1893,7 +1918,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         data.forEach(rowData => {
                             let idx = parseInt(rowData.bIndex) || 0;
                             if (idx <= 0) idx = bCounter + 1;
-                            if (idx > bCounter) bCounter = idx;   // ← MAX, ne count
+                            if (idx > bCounter) bCounter = idx;   // MAX, ne count
 
                             const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
                             const row = {
@@ -1940,6 +1965,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         updatePopups();
                         updateMouseInfo();
                         if (tableOverlay.style.display === 'block') renderTable();
+                        applyConfirmationsToBPoints();   // ← primijeni potvrde
                         recomputeRocketStock();
                     }
                 });
@@ -1985,7 +2011,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
                 if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
 
-                // Ako je modal već otvoren – zatvori ga i ugasi listener
                 const existing = document.getElementById('confirmationsModal');
                 if (existing) {
                     existing.remove();
@@ -1995,7 +2020,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     }
                 }
 
-                // Kreiramo modal
                 const modalElement = document.createElement('div');
                 modalElement.id = 'confirmationsModal';
                 modalElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
@@ -2016,7 +2040,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 modalElement.appendChild(innerDiv);
                 document.body.appendChild(modalElement);
 
-                // Zatvaranje klikom na pozadinu
                 modalElement.addEventListener('click', function(e) {
                     if (e.target === modalElement) {
                         modalElement.remove();
@@ -2026,7 +2049,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         }
                     }
                 });
-                // Zatvaranje klikom na dugme
                 document.getElementById('closeConfirmationsBtn').addEventListener('click', function() {
                     modalElement.remove();
                     if (confirmationsModalListener) {
@@ -2035,7 +2057,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     }
                 });
 
-                // LIVE listener – osvježava se na svaku promjenu
                 if (confirmationsModalListener) confirmationsModalListener.off();
                 confirmationsModalListener = firebaseDb.ref('confirmations');
                 confirmationsModalListener.on('value', snapshot => {
@@ -2049,10 +2070,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
 
                 const allConfs = [];
 
-                // 1. Iz bPoints (vlasničke potvrde + one koje je sync-ovao listenConfirmations)
+                // 1. Vlasničke potvrde iz bPoints
                 bPoints.forEach(row => {
                     if (row.confirmationTime) {
-                        // Izbjegni duplikate sa Firebase confirmations (isti bIndex)
                         const existsInFirebase = data && Object.values(data).some(c => c.bIndex === row.bIndex);
                         if (!existsInFirebase) {
                             allConfs.push({
@@ -2067,13 +2087,12 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     }
                 });
 
-                // 2. Iz Firebase confirmations (potvrde potvrđivača) – sa filter orphan
+                // 2. Iz Firebase confirmations – sa filter orphan
                 if (data) {
                     Object.values(data).forEach(c => {
                         const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
                         if (!bPoint) return;
 
-                        // ⛔ Preskoči orphan potvrde (stvorene prije B tačke)
                         const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
                         const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
                         if (bTimeMs && confMs && confMs < bTimeMs) return;
@@ -2093,8 +2112,8 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     contentDiv.innerHTML = '<p style="text-align:center;color:#888;">ℹ️ Nema potvrda.</p>';
                     return;
                 }
+                console.log(`📋 Prikazujem ${allConfs.length} potvrda u modalu`);
 
-                // Sortiraj po vremenu (najnovije prvo)
                 allConfs.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
 
                 let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
@@ -2509,6 +2528,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             console.log('✅ Planseta pokrenuta – sve ispravke primijenjene');
             console.log('📐 Grid: 16 kolona × 17 redova, slova D..P, R..T (bez Q), brojevi 11..27');
             console.log('🛡️ Orphan potvrde se ignoriraju; bCounter = max(bIndex)');
+            console.log('🔄 Sinhronizacija potvrda: vlasnik ↔ potvrđivač aktivna');
         });
     </script>
 </body>
