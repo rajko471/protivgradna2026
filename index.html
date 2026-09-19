@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -643,7 +644,6 @@ PE03,4,3`;
 
             // ================================================================
             // 🌐 GEOGRAFSKA MREŽA – CRNE LINIJE (meridijani 15', paralele 10')
-            // Poravnato sa kvadratima mreže: 16°00'–20°00' E, 42°30'–45°20' N
             // ================================================================
             const graticuleLayer = L.layerGroup().addTo(map);
             let graticuleVisible = true;
@@ -663,18 +663,8 @@ PE03,4,3`;
                 const LON_START = 16.0, LON_END = 20.0, LON_STEP = 15/60;
                 const LAT_START = 42 + 30/60, LAT_END = 45 + 20/60, LAT_STEP = 10/60;
 
-                const lineStyle = {
-                    color: '#000000',
-                    weight: 1,
-                    opacity: 0.7,
-                    interactive: false
-                };
-                const mainLineStyle = {
-                    color: '#000000',
-                    weight: 1.5,
-                    opacity: 0.9,
-                    interactive: false
-                };
+                const lineStyle = { color: '#000000', weight: 1, opacity: 0.7, interactive: false };
+                const mainLineStyle = { color: '#000000', weight: 1.5, opacity: 0.9, interactive: false };
 
                 const nLon = Math.round((LON_END - LON_START) / LON_STEP);
                 const nLat = Math.round((LAT_END - LAT_START) / LAT_STEP);
@@ -888,7 +878,6 @@ PE03,4,3`;
                 [45.96991870077077, 21.66292597350616]
             ];
 
-            // Cijeli CSV podaci
             const csvData = `FPGS,sirina,duzina,zoom,altitude,pp8pocetakA,pp8krajA,pp8pocetakB,pp8krajB,pp8pocetakC,pp8krajC,pp8pocetakD,pp8krajD,pp6pocetakA,pp6krajA,pp6pocetakB,pp6krajB,pp6pocetakC,pp6krajC,pp6pocetakD,pp6krajD,pp8radijusstart,pp8radijusend,pp6radijusstart,pp6radijusend,opstina
 NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5,90501
 1,45.197576,17.002114,42000,1,305,105,,,,,,,305,105,,,,,,,4,8,2.25,4.5,90501
@@ -970,7 +959,7 @@ NT,45.032990,17.317638,42000,1,305,35,155,245,,,,,305,35,95,245,,,,,4,8,2.25,4.5
 246,44.554314,17.321270,42000,1,15,35,145,155,,,,,,,,,,,,,4,8,2.25,4.5,90535
 247,44.463932,17.350882,42000,1,15,55,185,195,,,,,,,,,,,,,4,8,2.25,4.5,90535
 248,44.462284,17.422861,42000,1,225,265,295,315,,,,,,,,,,,,,4,8,2.25,4.5,90535
-249,44.408218,17.463243,42000,1,165,195,225,265,, ,,,,,,,,,,,4,8,2.25,4.5,90535
+249,44.408218,17.463243,42000,1,165,195,225,265,,,,,,,,,,,,,4,8,2.25,4.5,90535
 270,44.701832,18.392893,42000,1,35,95,165,205,245,285,,,,,,,,,,,4,8,2.25,4.5,90537
 271,44.746689,18.449495,42000,1,55,155,345,355,,,,,,,,,,,,,4,8,2.25,4.5,90537
 272,44.754391,18.527164,42000,1,105,115,175,285,,,,,,,,,,,,,4,8,2.25,4.5,90537
@@ -1651,8 +1640,6 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
 
             // ================================================================
             // GRID – PORAVNATO SA GEOGRAFSKOM MREŽOM
-            //   16°00'–20°00' E (16 kolona × 15')
-            //   42°30'–45°20' N (17 redova × 10')
             //   Slova: D, E, F, G, H, I, J, K, L, M, N, O, P, R, S, T (preskače Q)
             //   Brojevi: gore 11, dolje 27
             // ================================================================
@@ -1713,30 +1700,26 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             function generateGrid() {
-                // PORAVNATO SA GEOGRAFSKOM MREŽOM
-                const latStart = 42 + 30/60;   // 42°30' N
-                const latEnd   = 45 + 20/60;   // 45°20' N
-                const latStep  = 10/60;        // 10'
+                const latStart = 42 + 30/60;
+                const latEnd   = 45 + 20/60;
+                const latStep  = 10/60;
+                const lonStart = 16.0;
+                const lonEnd   = 20.0;
+                const lonStep  = 15/60;
 
-                const lonStart = 16.0;         // 16°00' E
-                const lonEnd   = 20.0;         // 20°00' E
-                const lonStep  = 15/60;        // 15'
-
-                const nLatRows = Math.round((latEnd - latStart) / latStep); // 17
-                const nLonCols = Math.round((lonEnd - lonStart) / lonStep); // 16
+                const nLatRows = Math.round((latEnd - latStart) / latStep);
+                const nLonCols = Math.round((lonEnd - lonStart) / lonStep);
                 const STEPS = 12;
 
                 for (let i = 0; i < nLatRows; i++) {
                     const latMin = latStart + i * latStep;
                     const latMax = latMin + latStep;
-                    // Redni broj: gore = 11, dolje = 27 (17 redova)
                     const redBroj = 27 - i;
 
                     for (let j = 0; j < nLonCols; j++) {
                         const lonMin = lonStart + j * lonStep;
                         const lonMax = lonMin + lonStep;
 
-                        // Zakrivljene ivice (12 segmenata po strani)
                         const ring = [];
                         for (let k = 0; k <= STEPS; k++) ring.push([latMax, lonMin + (lonMax - lonMin) * k / STEPS]);
                         for (let k = 1; k <= STEPS; k++) ring.push([latMax - (latMax - latMin) * k / STEPS, lonMax]);
@@ -1747,8 +1730,7 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         rect._latMin = latMin; rect._latMax = latMax;
                         rect._lonMin = lonMin; rect._lonMax = lonMax;
 
-                        // Slova: D, E, F, G, H, I, J, K, L, M, N, O, P, R, S, T (preskače Q)
-                        // Formula: ASCII 68 ('D') + j, a preskok za j >= 13 (preskače Q=81, ide na R=82)
+                        // Slova: D..P, R..T (preskače Q) – ASCII 68 = 'D', preskok za j >= 13
                         const slovo = String.fromCharCode(68 + j + (j >= 13 ? 1 : 0));
                         const id = slovo + redBroj;
 
@@ -1973,6 +1955,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 tableWrapper.innerHTML = html;
             }
 
+            // ================================================================
+            // ✅ POTVRDE – ispravljena verzija (bez inline onclick!)
+            // ================================================================
             function loadConfirmations() {
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
                 if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
@@ -1983,10 +1968,16 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     if (confirmations.length === 0) { alert('ℹ️ Nema potvrda.'); return; }
                     confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
 
-                    let html = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;">';
-                    html += '<div style="background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);">';
-                    html += '<h3>📋 Potvrde</h3>';
-                    html += '<button onclick="this.closest(\'div[style*=\'position:fixed\']\').remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
+                    // Kreiramo modal BEZ inline onclick
+                    const modalElement = document.createElement('div');
+                    modalElement.id = 'confirmationsModal';
+                    modalElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
+
+                    const innerDiv = document.createElement('div');
+                    innerDiv.style.cssText = 'background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+
+                    let html = '<h3 style="margin-top:0;">📋 Potvrde</h3>';
+                    html += '<button id="closeConfirmationsBtn" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
                     html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
                     html += '<thead><tr><th>B redni</th><th>A naziv</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
                     confirmations.forEach(c => {
@@ -1994,14 +1985,22 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
                         const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
                         const aName = bPoint ? bPoint.aName : '-';
-                        html += `<tr><td>${c.bIndex}</td><td>${aName}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
+                        html += '<tr><td>' + c.bIndex + '</td><td>' + aName + '</td><td>' + c.pp8x + '</td><td>' + c.td6bx + '</td><td>' + time + '</td><td>' + email + '</td></tr>';
                     });
-                    html += '</tbody></table></div></div>';
-                    const modalContainer = document.createElement('div');
-                    modalContainer.innerHTML = html;
-                    const modalElement = modalContainer.firstElementChild;
+                    html += '</tbody></table>';
+
+                    innerDiv.innerHTML = html;
+                    modalElement.appendChild(innerDiv);
                     document.body.appendChild(modalElement);
-                    modalElement.addEventListener('click', function(e) { if (e.target === this) this.remove(); });
+
+                    // Zatvori klikom na pozadinu
+                    modalElement.addEventListener('click', function(e) {
+                        if (e.target === modalElement) modalElement.remove();
+                    });
+                    // Zatvori klikom na dugme
+                    document.getElementById('closeConfirmationsBtn').addEventListener('click', function() {
+                        modalElement.remove();
+                    });
                 });
             }
 
@@ -2271,17 +2270,29 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 } catch (e) { return false; }
             }
 
+            // ================================================================
+            // 🔌 WEBSOCKET – SAMO NA LOCALHOST (bez spam grešaka na produkciji)
+            // ================================================================
             function connectWebSocket() {
-                const ws = new WebSocket('ws://localhost:3000');
-                ws.onopen = () => ws.send(JSON.stringify({ type: 'getLatestKmz' }));
-                ws.onmessage = (e) => {
-                    try {
-                        const d = JSON.parse(e.data);
-                        if (d.type === 'newKmz' || d.type === 'latestKmz' || d.type === 'refresh') loadFromServer();
-                    } catch (err) {}
-                };
-                ws.onclose = () => setTimeout(connectWebSocket, 5000);
-                return ws;
+                // Ako nismo na localhost-u, ne pokušavaj WebSocket (nema servera)
+                const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                if (!isLocal) return null;
+
+                try {
+                    const ws = new WebSocket('ws://localhost:3000');
+                    ws.onopen = () => ws.send(JSON.stringify({ type: 'getLatestKmz' }));
+                    ws.onmessage = (e) => {
+                        try {
+                            const d = JSON.parse(e.data);
+                            if (d.type === 'newKmz' || d.type === 'latestKmz' || d.type === 'refresh') loadFromServer();
+                        } catch (err) {}
+                    };
+                    ws.onerror = () => { /* tiho ignoriši */ };
+                    ws.onclose = () => setTimeout(connectWebSocket, 5000);
+                    return ws;
+                } catch (e) {
+                    return null;
+                }
             }
 
             document.getElementById('refreshBtn').addEventListener('click', async function() {
@@ -2377,10 +2388,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             updateSectorsVisibility();
-            console.log('✅ Planseta pokrenuta – grid poravnat sa geografskom mrežom (16°–20°E, 42°30′–45°20′N)');
-            console.log('📐 Grid: 16 kolona × 17 redova (15′ × 10′), slova D..P, R..T (bez Q)');
+            console.log('✅ Planseta pokrenuta – grid poravnat sa geografskom mrežom');
+            console.log('📐 Grid: 16 kolona × 17 redova, slova D..P, R..T (bez Q), brojevi 11..27');
         });
     </script>
 </body>
 </html>
-
