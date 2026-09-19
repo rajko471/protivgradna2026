@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="sr">
 <head>
@@ -643,7 +642,7 @@ PE03,4,3`;
             const tableOverlay = document.getElementById('tableOverlay');
 
             // ================================================================
-            // 🌐 GEOGRAFSKA MREŽA – CRNE LINIJE (meridijani 15', paralele 10')
+            // 🌐 GEOGRAFSKA MREŽA
             // ================================================================
             const graticuleLayer = L.layerGroup().addTo(map);
             let graticuleVisible = true;
@@ -870,6 +869,7 @@ PE03,4,3`;
             let bPointsRef = null, gridColorsRef = null, activeARef = null;
             let bPointsListener = null, gridColorsListener = null;
             let confirmationsListener = null;
+            let confirmationsModalListener = null;   // za LIVE osvježavanje modala
             let rocketStock = {};
 
             let currentKmzName = null, currentKmzModified = null, currentKmzSize = null;
@@ -1272,10 +1272,13 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         if (data) {
                             Object.values(data).forEach(c => {
                                 const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                                if (bPoint && rocketStock[bPoint.aName]) {
-                                    rocketStock[bPoint.aName].pp8 = Math.max(0, rocketStock[bPoint.aName].pp8 - (c.pp8x || 0));
-                                    rocketStock[bPoint.aName].td6b = Math.max(0, rocketStock[bPoint.aName].td6b - (c.td6bx || 0));
-                                }
+                                if (!bPoint || !rocketStock[bPoint.aName]) return;
+                                // Filtriranje orphan potvrda
+                                const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
+                                const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
+                                if (bTimeMs && confMs && confMs < bTimeMs) return;
+                                rocketStock[bPoint.aName].pp8 = Math.max(0, rocketStock[bPoint.aName].pp8 - (c.pp8x || 0));
+                                rocketStock[bPoint.aName].td6b = Math.max(0, rocketStock[bPoint.aName].td6b - (c.td6bx || 0));
                             });
                         }
                         updateARocketTooltips();
@@ -1772,6 +1775,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
             generateGrid();
 
+            // ================================================================
+            // ⚡ LISTEN CONFIRMATIONS – sa filtrom za orphan potvrde
+            // ================================================================
             function listenConfirmations() {
                 if (!firebaseInitialized) return;
                 if (confirmationsListener) confirmationsListener.off();
@@ -1782,16 +1788,21 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                     let updated = false;
                     Object.values(data).forEach(c => {
                         const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                        if (bPoint) {
-                            bPoint.pp8x = c.pp8x || 0;
-                            bPoint.td6bx = c.td6bx || 0;
-                            bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
-                            bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
-                            if (bPoint.marker) {
-                                bPoint.marker.setPopupContent(`PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`);
-                            }
-                            updated = true;
+                        if (!bPoint) return;
+
+                        // ⛔ IGNORIŠI ORPHAN POTVRDE – potvrde stvorene PRIJE B tačke
+                        const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
+                        const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
+                        if (bTimeMs && confMs && confMs < bTimeMs) return;   // preskoči staru potvrdu
+
+                        bPoint.pp8x = c.pp8x || 0;
+                        bPoint.td6bx = c.td6bx || 0;
+                        bPoint.confirmationTime = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : null;
+                        bPoint.confirmationDate = c.confirmationTime ? new Date(c.confirmationTime) : null;
+                        if (bPoint.marker) {
+                            bPoint.marker.setPopupContent(`PP8 ${bPoint.pp8} TD6B ${bPoint.td6b} B#${bPoint.bIndex}<br>A: ${bPoint.aName}<br>lat: ${bPoint.bLat}, lon: ${bPoint.bLon}<br>Vrijeme: ${bPoint.bTime}<br>Azimut: ${bPoint.az.toFixed(1)}°<br>Dist: ${bPoint.dist.toFixed(1)} km<br>PP8X: ${bPoint.pp8x}, TD6BX: ${bPoint.td6bx}<br>Potvrda: ${bPoint.confirmationTime}`);
                         }
+                        updated = true;
                     });
                     if (updated) {
                         recomputeRocketStock();
@@ -1800,6 +1811,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 });
             }
 
+            // ================================================================
+            // 📥 LOAD B POINTS – sa bCounter = max(bIndex), ne count
+            // ================================================================
             function loadBPointsFromFirebase() {
                 if (!firebaseInitialized || !bPointsRef) return;
                 bPointsRef.once('value').then(snapshot => {
@@ -1809,10 +1823,13 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         bPoints = [];
                         bCounter = 0;
                         data.forEach(rowData => {
-                            bCounter++;
+                            let idx = parseInt(rowData.bIndex) || 0;
+                            if (idx <= 0) idx = bCounter + 1;
+                            if (idx > bCounter) bCounter = idx;   // ← MAX, ne count
+
                             const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
                             const row = {
-                                bIndex: rowData.bIndex || bCounter, bLat: rowData.bLat, bLon: rowData.bLon,
+                                bIndex: idx, bLat: rowData.bLat, bLon: rowData.bLon,
                                 bDate: now, bTime: rowData.bTime || now.toLocaleString(),
                                 aName: rowData.aName || '', az: rowData.az || 0, dist: rowData.dist || 0,
                                 pp8: rowData.pp8 || 0, td6b: rowData.td6b || 0,
@@ -1860,6 +1877,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                 });
             }
 
+            // ================================================================
+            // 📥 LISTEN B POINTS – sa bCounter = max(bIndex), ne count
+            // ================================================================
             function listenBPoints() {
                 if (!firebaseInitialized || !bPointsRef) return;
                 if (bPointsListener) bPointsListener.off();
@@ -1871,10 +1891,13 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
                         bPoints = [];
                         bCounter = 0;
                         data.forEach(rowData => {
-                            bCounter++;
+                            let idx = parseInt(rowData.bIndex) || 0;
+                            if (idx <= 0) idx = bCounter + 1;
+                            if (idx > bCounter) bCounter = idx;   // ← MAX, ne count
+
                             const now = rowData.bDate ? new Date(rowData.bDate) : new Date();
                             const row = {
-                                bIndex: rowData.bIndex || bCounter, bLat: rowData.bLat, bLon: rowData.bLon,
+                                bIndex: idx, bLat: rowData.bLat, bLon: rowData.bLon,
                                 bDate: now, bTime: rowData.bTime || now.toLocaleString(),
                                 aName: rowData.aName || '', az: rowData.az || 0, dist: rowData.dist || 0,
                                 pp8: rowData.pp8 || 0, td6b: rowData.td6b || 0,
@@ -1956,52 +1979,148 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // ✅ POTVRDE – ispravljena verzija (bez inline onclick!)
+            // ✅ POTVRDE – LIVE modal + filter orphan + bez inline onclick
             // ================================================================
             function loadConfirmations() {
                 if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
                 if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
-                firebaseDb.ref('confirmations').once('value').then(snapshot => {
-                    const data = snapshot.val();
-                    if (!data) { alert('ℹ️ Nema potvrda.'); return; }
-                    const confirmations = Object.values(data);
-                    if (confirmations.length === 0) { alert('ℹ️ Nema potvrda.'); return; }
-                    confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
 
-                    // Kreiramo modal BEZ inline onclick
-                    const modalElement = document.createElement('div');
-                    modalElement.id = 'confirmationsModal';
-                    modalElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
+                // Ako je modal već otvoren – zatvori ga i ugasi listener
+                const existing = document.getElementById('confirmationsModal');
+                if (existing) {
+                    existing.remove();
+                    if (confirmationsModalListener) {
+                        confirmationsModalListener.off();
+                        confirmationsModalListener = null;
+                    }
+                }
 
-                    const innerDiv = document.createElement('div');
-                    innerDiv.style.cssText = 'background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+                // Kreiramo modal
+                const modalElement = document.createElement('div');
+                modalElement.id = 'confirmationsModal';
+                modalElement.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
 
-                    let html = '<h3 style="margin-top:0;">📋 Potvrde</h3>';
-                    html += '<button id="closeConfirmationsBtn" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
-                    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-                    html += '<thead><tr><th>B redni</th><th>A naziv</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
-                    confirmations.forEach(c => {
-                        const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
-                        const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
-                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-                        const aName = bPoint ? bPoint.aName : '-';
-                        html += '<tr><td>' + c.bIndex + '</td><td>' + aName + '</td><td>' + c.pp8x + '</td><td>' + c.td6bx + '</td><td>' + time + '</td><td>' + email + '</td></tr>';
-                    });
-                    html += '</tbody></table>';
+                const innerDiv = document.createElement('div');
+                innerDiv.style.cssText = 'background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);min-width:600px;';
 
-                    innerDiv.innerHTML = html;
-                    modalElement.appendChild(innerDiv);
-                    document.body.appendChild(modalElement);
+                innerDiv.innerHTML =
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+                        '<h3 style="margin:0;">📋 Potvrde</h3>' +
+                        '<div>' +
+                            '<span id="confirmationsLiveBadge" style="background:#28a745;color:#fff;padding:2px 10px;border-radius:12px;font-size:11px;margin-right:8px;">🟢 LIVE</span>' +
+                            '<button id="closeConfirmationsBtn" style="background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div id="confirmationsContent">⏳ Učitavanje...</div>';
 
-                    // Zatvori klikom na pozadinu
-                    modalElement.addEventListener('click', function(e) {
-                        if (e.target === modalElement) modalElement.remove();
-                    });
-                    // Zatvori klikom na dugme
-                    document.getElementById('closeConfirmationsBtn').addEventListener('click', function() {
+                modalElement.appendChild(innerDiv);
+                document.body.appendChild(modalElement);
+
+                // Zatvaranje klikom na pozadinu
+                modalElement.addEventListener('click', function(e) {
+                    if (e.target === modalElement) {
                         modalElement.remove();
-                    });
+                        if (confirmationsModalListener) {
+                            confirmationsModalListener.off();
+                            confirmationsModalListener = null;
+                        }
+                    }
                 });
+                // Zatvaranje klikom na dugme
+                document.getElementById('closeConfirmationsBtn').addEventListener('click', function() {
+                    modalElement.remove();
+                    if (confirmationsModalListener) {
+                        confirmationsModalListener.off();
+                        confirmationsModalListener = null;
+                    }
+                });
+
+                // LIVE listener – osvježava se na svaku promjenu
+                if (confirmationsModalListener) confirmationsModalListener.off();
+                confirmationsModalListener = firebaseDb.ref('confirmations');
+                confirmationsModalListener.on('value', snapshot => {
+                    renderConfirmationsContent(snapshot.val());
+                });
+            }
+
+            function renderConfirmationsContent(data) {
+                const contentDiv = document.getElementById('confirmationsContent');
+                if (!contentDiv) return;
+
+                const allConfs = [];
+
+                // 1. Iz bPoints (vlasničke potvrde + one koje je sync-ovao listenConfirmations)
+                bPoints.forEach(row => {
+                    if (row.confirmationTime) {
+                        // Izbjegni duplikate sa Firebase confirmations (isti bIndex)
+                        const existsInFirebase = data && Object.values(data).some(c => c.bIndex === row.bIndex);
+                        if (!existsInFirebase) {
+                            allConfs.push({
+                                bIndex: row.bIndex,
+                                aName: row.aName,
+                                pp8x: row.pp8x,
+                                td6bx: row.td6bx,
+                                confirmationTime: row.confirmationDate ? row.confirmationDate.toISOString() : row.confirmationTime,
+                                confirmedByEmail: '👑 vlasnik'
+                            });
+                        }
+                    }
+                });
+
+                // 2. Iz Firebase confirmations (potvrde potvrđivača) – sa filter orphan
+                if (data) {
+                    Object.values(data).forEach(c => {
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        if (!bPoint) return;
+
+                        // ⛔ Preskoči orphan potvrde (stvorene prije B tačke)
+                        const bTimeMs = bPoint.bDate ? new Date(bPoint.bDate).getTime() : 0;
+                        const confMs  = c.confirmationTime ? new Date(c.confirmationTime).getTime() : 0;
+                        if (bTimeMs && confMs && confMs < bTimeMs) return;
+
+                        allConfs.push({
+                            bIndex: c.bIndex,
+                            aName: bPoint ? bPoint.aName : '-',
+                            pp8x: c.pp8x,
+                            td6bx: c.td6bx,
+                            confirmationTime: c.confirmationTime,
+                            confirmedByEmail: c.confirmedByEmail || c.confirmedBy || 'nepoznat'
+                        });
+                    });
+                }
+
+                if (allConfs.length === 0) {
+                    contentDiv.innerHTML = '<p style="text-align:center;color:#888;">ℹ️ Nema potvrda.</p>';
+                    return;
+                }
+
+                // Sortiraj po vremenu (najnovije prvo)
+                allConfs.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
+
+                let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+                html += '<thead><tr style="background:#f0f0f0;">' +
+                    '<th style="border:1px solid #ccc;padding:6px;">B redni</th>' +
+                    '<th style="border:1px solid #ccc;padding:6px;">A naziv</th>' +
+                    '<th style="border:1px solid #ccc;padding:6px;">PP8X</th>' +
+                    '<th style="border:1px solid #ccc;padding:6px;">TD6BX</th>' +
+                    '<th style="border:1px solid #ccc;padding:6px;">Vrijeme potvrde</th>' +
+                    '<th style="border:1px solid #ccc;padding:6px;">Potvrdio</th>' +
+                    '</tr></thead><tbody>';
+
+                allConfs.forEach(c => {
+                    const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
+                    html += '<tr>' +
+                        '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + c.bIndex + '</td>' +
+                        '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + c.aName + '</td>' +
+                        '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + c.pp8x + '</td>' +
+                        '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + c.td6bx + '</td>' +
+                        '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + time + '</td>' +
+                        '<td style="border:1px solid #ccc;padding:6px;text-align:center;">' + c.confirmedByEmail + '</td>' +
+                        '</tr>';
+                });
+
+                html += '</tbody></table>';
+                contentDiv.innerHTML = html;
             }
 
             function showHoverTooltip(text, latlng) {
@@ -2271,10 +2390,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             // ================================================================
-            // 🔌 WEBSOCKET – SAMO NA LOCALHOST (bez spam grešaka na produkciji)
+            // 🔌 WEBSOCKET – SAMO NA LOCALHOST
             // ================================================================
             function connectWebSocket() {
-                // Ako nismo na localhost-u, ne pokušavaj WebSocket (nema servera)
                 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 if (!isLocal) return null;
 
@@ -2388,8 +2506,9 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             updateSectorsVisibility();
-            console.log('✅ Planseta pokrenuta – grid poravnat sa geografskom mrežom');
+            console.log('✅ Planseta pokrenuta – sve ispravke primijenjene');
             console.log('📐 Grid: 16 kolona × 17 redova, slova D..P, R..T (bez Q), brojevi 11..27');
+            console.log('🛡️ Orphan potvrde se ignoriraju; bCounter = max(bIndex)');
         });
     </script>
 </body>
