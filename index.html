@@ -1974,108 +1974,37 @@ PE03,44.928856,18.525919,42000,1,24,56,103,121,136,169,223,272,136,169,,,,,,,4,8
             }
 
             function loadConfirmations() {
-    if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
-    if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
+                if (!isOwner()) { alert('⚠️ Samo vlasnik može vidjeti potvrde.'); return; }
+                if (!firebaseInitialized) { alert('🔥 Firebase nije inicijalizovan.'); return; }
+                firebaseDb.ref('confirmations').once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (!data) { alert('ℹ️ Nema potvrda.'); return; }
+                    const confirmations = Object.values(data);
+                    if (confirmations.length === 0) { alert('ℹ️ Nema potvrda.'); return; }
+                    confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
 
-    // Ukloni postojeći modal ako postoji
-    const oldModal = document.getElementById('confirmationsModal');
-    if (oldModal) oldModal.remove();
-
-    statusDiv.textContent = '⏳ Učitavam potvrde...';
-    statusDiv.style.display = 'block';
-
-    firebaseDb.ref('confirmations').once('value').then(snapshot => {
-        statusDiv.style.display = 'none';
-        const data = snapshot.val();
-        if (!data) { alert('ℹ️ Nema potvrda u bazi.'); return; }
-        const confirmations = Object.values(data);
-        if (confirmations.length === 0) { alert('ℹ️ Nema potvrda.'); return; }
-        confirmations.sort((a, b) => new Date(b.confirmationTime) - new Date(a.confirmationTime));
-
-        // ---------- Kreiranje modala kroz DOM API (bez innerHTML) ----------
-        const modalElement = document.createElement('div');
-        modalElement.id = 'confirmationsModal';
-        modalElement.style.cssText =
-            'position:fixed;top:0;left:0;width:100%;height:100%;' +
-            'background:rgba(0,0,0,0.55);z-index:100000;' +
-            'display:flex;justify-content:center;align-items:center;';
-
-        const inner = document.createElement('div');
-        inner.style.cssText =
-            'background:white;padding:20px 24px;border-radius:10px;' +
-            'max-width:85%;max-height:85%;overflow:auto;' +
-            'box-shadow:0 0 30px rgba(0,0,0,0.5);position:relative;min-width:400px;';
-
-        const title = document.createElement('h3');
-        title.textContent = '📋 Potvrde (' + confirmations.length + ')';
-        title.style.cssText = 'margin:0 0 12px 0;padding-right:90px;';
-        inner.appendChild(title);
-
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '✕ Zatvori';
-        closeBtn.style.cssText =
-            'position:absolute;top:16px;right:16px;background:#dc3545;color:#fff;' +
-            'border:none;border-radius:5px;padding:6px 14px;cursor:pointer;font-weight:bold;';
-        closeBtn.addEventListener('click', () => modalElement.remove());
-        inner.appendChild(closeBtn);
-
-        const table = document.createElement('table');
-        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
-
-        const thead = document.createElement('thead');
-        const trHead = document.createElement('tr');
-        trHead.style.background = '#f0f0f0';
-        ['B redni','A naziv','PP8X','TD6BX','Vrijeme potvrde','Potvrdio (email)'].forEach(h => {
-            const th = document.createElement('th');
-            th.textContent = h;
-            th.style.cssText = 'border:1px solid #ccc;padding:6px;text-align:center;';
-            trHead.appendChild(th);
-        });
-        thead.appendChild(trHead);
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        confirmations.forEach(c => {
-            const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
-            const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
-            const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
-            const aName = bPoint ? bPoint.aName : '-';
-
-            const tr = document.createElement('tr');
-            [c.bIndex, aName, c.pp8x, c.td6bx, time, email].forEach(val => {
-                const td = document.createElement('td');
-                td.textContent = (val === undefined || val === null) ? '-' : val;
-                td.style.cssText = 'border:1px solid #ccc;padding:6px;text-align:center;';
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        inner.appendChild(table);
-
-        modalElement.appendChild(inner);
-        document.body.appendChild(modalElement);
-
-        // Klik van modala ga zatvara
-        modalElement.addEventListener('click', function(e) {
-            if (e.target === modalElement) modalElement.remove();
-        });
-
-        // ESC zatvara modal
-        const escHandler = function(e) {
-            if (e.key === 'Escape') {
-                modalElement.remove();
-                document.removeEventListener('keydown', escHandler);
+                    let html = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;">';
+                    html += '<div style="background:white;padding:20px;border-radius:8px;max-width:80%;max-height:80%;overflow:auto;box-shadow:0 0 20px rgba(0,0,0,0.5);">';
+                    html += '<h3>📋 Potvrde</h3>';
+                    html += '<button onclick="this.closest(\'div[style*=\'position:fixed\']\').remove()" style="float:right;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">✕ Zatvori</button>';
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+                    html += '<thead><tr><th>B redni</th><th>A naziv</th><th>PP8X</th><th>TD6BX</th><th>Vrijeme potvrde</th><th>Potvrdio (email)</th></tr></thead><tbody>';
+                    confirmations.forEach(c => {
+                        const time = c.confirmationTime ? new Date(c.confirmationTime).toLocaleString() : '-';
+                        const email = c.confirmedByEmail || c.confirmedBy || 'nepoznat';
+                        const bPoint = bPoints.find(p => p.bIndex === c.bIndex);
+                        const aName = bPoint ? bPoint.aName : '-';
+                        html += `<tr><td>${c.bIndex}</td><td>${aName}</td><td>${c.pp8x}</td><td>${c.td6bx}</td><td>${time}</td><td>${email}</td></tr>`;
+                    });
+                    html += '</tbody></table></div></div>';
+                    const modalContainer = document.createElement('div');
+                    modalContainer.innerHTML = html;
+                    const modalElement = modalContainer.firstElementChild;
+                    document.body.appendChild(modalElement);
+                    modalElement.addEventListener('click', function(e) { if (e.target === this) this.remove(); });
+                });
             }
-        };
-        document.addEventListener('keydown', escHandler);
 
-    }).catch(err => {
-        statusDiv.style.display = 'none';
-        console.error('Greška pri učitavanju potvrda:', err);
-        alert('❌ Greška pri učitavanju potvrda:\n' + (err && err.message ? err.message : err));
-    });
-}
             function showHoverTooltip(text, latlng) {
                 hoverTooltip.textContent = text;
                 hoverTooltip.style.display = 'block';
